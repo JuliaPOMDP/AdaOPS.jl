@@ -1,0 +1,37 @@
+name = "PMCP"
+uuid = "eadfb9d8-44f1-454c-a5eb-0663ee7d74a1"
+version = "0.1.0"
+
+[deps]
+BasicPOMCP = "d721219e-3fc6-5570-a8ef-e5402f47c49e"
+BeliefUpdaters = "8bb6e9a1-7d73-552c-a44a-e5dc5634aac4"
+CPUTime = "a9c8d775-2e2e-55fc-8582-045d282d599e"
+D3Trees = "e3df1716-f71e-5df9-9e2d-98e193103c45"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MCTS = "e12ccd36-dcad-5f33-8774-9175229e7b33"
+POMDPModelTools = "08074719-1b2a-587c-a292-00f91cc44415"
+POMDPPolicies = "182e52fb-cfd0-5e46-8c26-fd0667c990f4"
+POMDPSimulators = "e0d0a172-29c6-5d4e-96d0-f262df5d01fd"
+POMDPs = "a93abf59-7444-517b-a68a-c42f96afdd7d"
+Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+ParticleFilters = "c8b314e2-9260-5cf8-ae76-3be7461ca6d0"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[compat]
+BasicPOMCP = "0.3"
+BeliefUpdaters = "0.1, 0.2"
+CPUTime = "1"
+D3Trees = "0.3"
+POMDPModelTools = "0.2, 0.3"
+POMDPs = "0.9"
+Parameters = "0.12"
+ParticleFilters = "0.4, 0.5"
+julia = "1"
+
+[extras]
+POMDPModels = "355abbd5-f08e-5560-ac9e-8b5f2592a0ca"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test", "POMDPModels"]
