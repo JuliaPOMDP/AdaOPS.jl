@@ -1,5 +1,6 @@
 name = "PMCP"
 uuid = "eadfb9d8-44f1-454c-a5eb-0663ee7d74a1"
+repo = "git@github.com:AutomobilePOMDP/PMCP.jl.git"
 version = "0.1.0"
 
 [deps]
