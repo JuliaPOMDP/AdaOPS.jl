@@ -10,8 +10,9 @@ If you are trying to use this package and require more documentation, please fil
 
 ```julia
 using Pkg
-Pkg.add("POMDPs")
-Pkg.add("git@github.com:AutomobilePOMDP/PMCP.jl.git")
+pkg> add "POMDPs"
+pkg> registry add "https://github.com/JuliaPOMDP/Registry.git"
+pkg> add "git@github.com:AutomobilePOMDP/PMCP.jl.git"
 ```
 
 ## Usage
