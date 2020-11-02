@@ -53,10 +53,10 @@ PMCPSolver(bounds=IndependentBounds(lower, upper))
 ```
 where `lower` and `upper` are either a number, a function or some other objects (see below).
 
-Often, the lower bound is calculated with a default policy, this can be accomplished using a `RolloutLB` which takes in a `PORollout`, `SolvedPORollout`, `FORollout` or `SolvedFORollout`. For the in-depth details, please refer to [BasicPOMCP](https://github.com/JuliaPOMDP/BasicPOMCP.jl/blob/master/src/rollout.jl)
+Often, the lower bound is calculated with a default policy, this can be accomplished using a `RolloutLB` which takes in a `PORollout`, `SolvedPORollout`, `FORollout` or `SolvedFORollout`. For the in-depth details, please refer to [BasicPOMCP](https://github.com/JuliaPOMDP/BasicPOMCP.jl/blob/master/src/rollout.jl).
 
 Both the lower and upper bounds can be initialized with value estimations using a `FOValueBound` or `POValueBound`.
-`FOValueBound` support any `offline MDP``Solver` or `Policy`. `POValueBound` support any `offline POMDP``Solver` or `Policy`.
+`FOValueBound` support any `offline MDP Solver` or `Policy`. `POValueBound` support any `offline POMDP Solver` or `Policy`.
 
 If `lower` or `upper` is a function, it should handle two arguments. The first is the `POMDP` object and the second is the `WPFBelief`. To access the state particles in a `WPFBelief` `b`, use `particles(b)`. To access the corresponding weights of particles in a `WPFBelief` `b`, use `weights(b)`. All `AbstractParticleBelief` are supported for `WPFBelief`. More details can be found in the [Solver source code](/src/wpf_belief.jl).
 
