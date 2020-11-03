@@ -89,7 +89,7 @@ solver = PMCPSolver(bounds=IndependentBounds(lower, upper))
 [D3Trees.jl](https://github.com/sisl/D3Trees.jl) can be used to visualize the search tree, for example
 
 ```julia
-using POMDPs, POMDPModels, POMDPModelTools, D3Trees, ARDESPOT
+using POMDPs, POMDPModels, POMDPModelTools, D3Trees, PMCP
 
 pomdp = TigerPOMDP()
 
