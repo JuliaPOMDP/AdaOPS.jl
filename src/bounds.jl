@@ -302,7 +302,7 @@ function estimate_value(estimator::Union{SolvedPORollout,SolvedFORollout}, pomdp
     rollout(estimator, pomdp, start_state, b, steps)
 end
 
-@POMDP_require estimate_value(estimator::Union{SolvedPORollout,SolvedFORollout}, pomdp::POMDP, start_state, b::WPFBelief, steps::Int) begin
+POMDPLinter.@POMDP_require estimate_value(estimator::Union{SolvedPORollout,SolvedFORollout}, pomdp::POMDP, start_state, b::WPFBelief, steps::Int) begin
     @subreq rollout(estimator, pomdp, start_state, b, steps)
 end
 
@@ -313,7 +313,7 @@ function rollout(est::SolvedPORollout, pomdp::POMDP, start_state, b::WPFBelief, 
     return simulate(sim, pomdp, est.policy, est.updater, b, start_state)
 end
 
-@POMDP_require rollout(est::SolvedPORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int) begin
+POMDPLinter.@POMDP_require rollout(est::SolvedPORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int) begin
     @req extract_belief(::typeof(est.updater), ::typeof(b))
     b = extract_belief(est.updater, b)
     sim = RolloutSimulator(est.rng, steps)
@@ -325,7 +325,7 @@ function rollout(est::SolvedFORollout, pomdp::POMDP, start_state, b::WPFBelief, 
     return simulate(sim, pomdp, est.policy, start_state)
 end
 
-@POMDP_require rollout(est::SolvedFORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int) begin
+POMDPLinter.@POMDP_require rollout(est::SolvedFORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int) begin
     sim = RolloutSimulator(est.rng, steps)
     @subreq simulate(sim, pomdp, est.policy, start_state)
 end

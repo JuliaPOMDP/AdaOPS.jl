@@ -11,6 +11,7 @@ using Printf
 using POMDPModelTools
 using POMDPSimulators
 using POMDPPolicies
+using POMDPLinter
 using LinearAlgebra
 
 using MCTS
