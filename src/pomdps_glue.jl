@@ -10,7 +10,7 @@ function POMDPModelTools.action_info(p::OPSPlanner, b)
         end
 
         if isempty(D.children[1]) && D.U[1] - D.L[1] <= p.sol.epsilon_0
-            throw(NoGap(D.l_0[1]))
+            throw(NoGap(D.L[1]))
         end
 
         best_L = -Inf

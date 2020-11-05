@@ -233,7 +233,7 @@ A lower bound calculated by running a default policy on the scenarios in a belie
 - `max_depth::Union{Nothing,Int}=nothing`: max depth to run the simulation. The depth of the belief will be automatically subtracted so simulations for the bound will be run for `max_depth-b.depth` steps. If `nothing`, the solver's max depth will be used.
 """
 
-struct RolloutLB{T}
+mutable struct RolloutLB{T}
     rollout_estimator::T
     max_depth::Union{Int, Nothing}
 end
@@ -243,6 +243,15 @@ function RolloutLB(rollout_estimator::Any; max_depth=nothing)
 end
 
 function init_bound(lb::RolloutLB, pomdp::POMDP, sol::OPSSolver, rng::R) where R <: AbstractRNG
+    if typeof(lb.rollout_estimator) <: PORollout
+        if typeof(lb.rollout_estimator.updater) <: BasicParticleFilter
+            lb.rollout_estimator = PORollout(lb.rollout_estimator.solver,
+                                             BasicParticleFilter(pomdp,
+                                                                lb.rollout_estimator.updater.resampler,
+                                                                lb.rollout_estimator.updater.n_init,
+                                                                lb.rollout_estimator.updater.rng))
+        end
+    end
     solved_estimator = convert_estimator(lb.rollout_estimator, pomdp, rng)
     max_depth = something(lb.max_depth, sol.D)
     return RolloutLB(solved_estimator, max_depth)
