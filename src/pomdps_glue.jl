@@ -1,6 +1,6 @@
-POMDPs.solve(sol::PMCPSolver, p::POMDP) = PMCPPlanner(sol, p)
+POMDPs.solve(sol::OPSSolver, p::POMDP) = OPSPlanner(sol, p)
 
-function POMDPModelTools.action_info(p::PMCPPlanner, b)
+function POMDPModelTools.action_info(p::OPSPlanner, b)
     info = Dict{Symbol, Any}()
     try
         D = build_tree(p, b)
@@ -31,10 +31,10 @@ function POMDPModelTools.action_info(p::PMCPPlanner, b)
     end
 end
 
-POMDPs.action(p::PMCPPlanner, b) = first(action_info(p, b))::actiontype(p.pomdp)
-POMDPs.updater(p::PMCPPlanner) = SIRParticleFilter(p.pomdp, p.sol.m * 10, rng=p.rng)
+POMDPs.action(p::OPSPlanner, b) = first(action_info(p, b))::actiontype(p.pomdp)
+POMDPs.updater(p::OPSPlanner) = SIRParticleFilter(p.pomdp, p.sol.m * 10, rng=p.rng)
 
-function Random.seed!(p::PMCPPlanner, seed)
+function Random.seed!(p::OPSPlanner, seed)
     Random.seed!(p.rng, seed)
     return p
 end

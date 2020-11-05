@@ -49,12 +49,12 @@ function POMDPs.history(belief::WPFBelief)
 end
 initialize_belief(::PreviousObservationUpdater, b::WPFBelief) = b._obs
 
-function resample(b::WPFBelief, p::PMCPPlanner)
+function resample(b::WPFBelief, p::OPSPlanner)
     particle_collection = ParticleFilters.resample(p.sol.r, b, p.rng)
     return WPFBelief(particles(particle_collection), fill(1/p.sol.m, p.sol.m), 1.0, b.belief, b.depth, b.tree, b._obs)
 end
 
-function resample!(b::WPFBelief, p::PMCPPlanner)
+function resample!(b::WPFBelief, p::OPSPlanner)
     particle_collection = ParticleFilters.resample(p.sol.r, b, p.rng)
     b.particles = particles(particle_collection)
     b.weights = fill(1/p.sol.m, p.sol.m)

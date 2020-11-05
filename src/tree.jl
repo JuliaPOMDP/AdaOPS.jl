@@ -1,4 +1,4 @@
-struct PMCPTree{S,A,O}
+struct OPSTree{S,A,O}
     weights::Vector{Vector{Float64}} # stores weights for *belief node*
     children::Vector{Vector{Int}} # to children *ba nodes*
     parent::Vector{Int} # maps to the parent *ba node*
@@ -20,7 +20,7 @@ struct PMCPTree{S,A,O}
     # _discount::Float64 # for inferring L in visualization
 end
 
-function PMCPTree(p::PMCPPlanner, b_0)
+function OPSTree(p::OPSPlanner, b_0)
     S = statetype(p.pomdp)
     A = actiontype(p.pomdp)
     O = obstype(p.pomdp)
@@ -28,7 +28,7 @@ function PMCPTree(p::PMCPPlanner, b_0)
     root_belief = WPFBelief([rand(p.rng, b_0) for i in 1:p.sol.m], fill(1/p.sol.m, p.sol.m), 1.0, 1, 0)
     L, U = bounds(p.bounds, p.pomdp, root_belief, p.sol.bounds_warnings)
 
-    return PMCPTree{S,A,O}([root_belief.weights],
+    return OPSTree{S,A,O}([root_belief.weights],
                          [Int[]],
                          [0],
                          [0],
@@ -49,7 +49,7 @@ function PMCPTree(p::PMCPPlanner, b_0)
                  )
 end
 
-function expand!(D::PMCPTree, b::Int, p::PMCPPlanner)
+function expand!(D::OPSTree, b::Int, p::OPSPlanner)
     S = statetype(p.pomdp)
     A = actiontype(p.pomdp)
     O = obstype(p.pomdp)
@@ -118,7 +118,7 @@ function expand!(D::PMCPTree, b::Int, p::PMCPPlanner)
     end
 end
 
-function Base.resize!(D::PMCPTree, n::Int)
+function Base.resize!(D::OPSTree, n::Int)
     resize!(D.weights, n)
     resize!(D.children, n)
     resize!(D.parent, n)
@@ -129,7 +129,7 @@ function Base.resize!(D::PMCPTree, n::Int)
     resize!(D.obs_freq, n)
 end
 
-function get_wpfbelief(D::PMCPTree, b::Int)
+function get_wpfbelief(D::OPSTree, b::Int)
     if b == 1
         return D.root_belief
     else

@@ -1,5 +1,5 @@
-function build_tree(p::PMCPPlanner, b_0)
-    D = PMCPTree(p, b_0)
+function build_tree(p::OPSPlanner, b_0)
+    D = OPSTree(p, b_0)
     b = 1
     trial = 1
     start = CPUtime_us()
@@ -15,7 +15,7 @@ function build_tree(p::PMCPPlanner, b_0)
     return D
 end
 
-function explore!(D::PMCPTree, b::Int, p::PMCPPlanner)
+function explore!(D::OPSTree, b::Int, p::OPSPlanner)
     while D.Delta[b] <= p.sol.D &&
         excess_uncertainty(D, b, p) > 0.0
         if isempty(D.children[b]) # a leaf
@@ -30,11 +30,11 @@ function explore!(D::PMCPTree, b::Int, p::PMCPPlanner)
     return b
 end
 
-function make_default!(D::PMCPTree, b::Int)
+function make_default!(D::OPSTree, b::Int)
     D.U[b] = D.L[b]
 end
 
-function backup!(D::PMCPTree, b::Int, p::PMCPPlanner)
+function backup!(D::OPSTree, b::Int, p::OPSPlanner)
     # Note: maybe this could be sped up by just calculating the change in the one mu and l corresponding to bp, rather than summing up over all bp
     while b != 1
         ba = D.parent[b]
@@ -48,7 +48,7 @@ function backup!(D::PMCPTree, b::Int, p::PMCPPlanner)
     end
 end
 
-function next_best(D::PMCPTree, b::Int, p::PMCPPlanner)
+function next_best(D::OPSTree, b::Int, p::OPSPlanner)
     max_U = -Inf
     best_ba = first(D.children[b])
     for ba in D.children[b]
@@ -77,6 +77,6 @@ function next_best(D::PMCPTree, b::Int, p::PMCPPlanner)
     # return D.ba_children[ba][zi]
 end
 
-function excess_uncertainty(D::PMCPTree, b::Int, p::PMCPPlanner)
+function excess_uncertainty(D::OPSTree, b::Int, p::OPSPlanner)
     return D.U[b]-D.L[b] - p.sol.xi * (D.U[1]-D.L[1]) / p.discounts[D.Delta[b]+1]
 end

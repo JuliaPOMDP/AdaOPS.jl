@@ -1,4 +1,4 @@
-using PMCP
+using OPS
 using Test
 
 using POMDPs
@@ -47,14 +47,14 @@ pomdp = BabyPOMDP()
 
 # constant bounds
 bds = (reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
-solver = PMCPSolver(bounds=bds)
+solver = OPSSolver(bounds=bds)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=2)
 @time hist = simulate(hr, pomdp, planner)
 
 # policy lower bound
 bds = IndependentBounds(RolloutLB(PORollout(FeedWhenCrying(), PreviousObservationUpdater())), 0.0)
-solver = PMCPSolver(bounds=bds)
+solver = OPSSolver(bounds=bds)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=2)
 @time hist = simulate(hr, pomdp, planner)
@@ -62,26 +62,26 @@ hr = HistoryRecorder(max_steps=2)
 # Type stability
 pomdp = BabyPOMDP()
 bds = IndependentBounds(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
-solver = PMCPSolver(epsilon_0=0.1,
+solver = OPSSolver(epsilon_0=0.1,
                       bounds=bds,
                       rng=MersenneTwister(4)
                      )
 p = solve(solver, pomdp)
 
 b0 = initialstate(pomdp)
-D = @inferred PMCP.build_tree(p, b0)
-@inferred PMCP.explore!(D, 1, p)
-@inferred PMCP.expand!(D, length(D.children), p)
-@inferred PMCP.make_default!(D, length(D.children))
-@inferred PMCP.backup!(D, 1, p)
-@inferred PMCP.next_best(D, 1, p)
-@inferred PMCP.excess_uncertainty(D, 1, p)
+D = @inferred OPS.build_tree(p, b0)
+@inferred OPS.explore!(D, 1, p)
+@inferred OPS.expand!(D, length(D.children), p)
+@inferred OPS.make_default!(D, length(D.children))
+@inferred OPS.backup!(D, 1, p)
+@inferred OPS.next_best(D, 1, p)
+@inferred OPS.excess_uncertainty(D, 1, p)
 @inferred action(p, b0)
 
 
 bds = IndependentBounds(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
 rng = MersenneTwister(4)
-solver = PMCPSolver(epsilon_0=0.1,
+solver = OPSSolver(epsilon_0=0.1,
                       bounds=bds,
                       rng=rng,
                       tree_in_info=true
@@ -95,11 +95,11 @@ a, info = action_info(p, initialstate(pomdp))
 show(stdout, MIME("text/plain"), info[:tree])
 
 # from README:
-using POMDPs, POMDPModels, POMDPSimulators, PMCP
+using POMDPs, POMDPModels, POMDPSimulators, OPS
 
 pomdp = TigerPOMDP()
 
-solver = PMCPSolver(bounds=(-20.0, 0.0))
+solver = OPSSolver(bounds=(-20.0, 0.0))
 planner = solve(solver, pomdp)
 
 for (s, a, o) in stepthrough(pomdp, planner, "s,a,o", max_steps=10)

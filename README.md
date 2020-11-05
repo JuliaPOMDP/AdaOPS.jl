@@ -1,6 +1,6 @@
-# PMCP
+# OPS
 
-An implementation of the PMCP (Packing-based Monte Carlo Planning) online POMDP Solver.
+An implementation of the OPS (Online Packing-based Search) online POMDP Solver.
 
 Problems use the [POMDPs.jl generative interface](https://github.com/JuliaPOMDP/POMDPs.jl).
 
@@ -12,17 +12,17 @@ If you are trying to use this package and require more documentation, please fil
 using Pkg
 pkg> add "POMDPs"
 pkg> registry add "https://github.com/JuliaPOMDP/Registry.git"
-pkg> add "git@github.com:AutomobilePOMDP/PMCP.jl.git"
+pkg> add "git@github.com:AutomobilePOMDP/OPS.jl.git"
 ```
 
 ## Usage
 
 ```julia
-using POMDPs, POMDPModels, POMDPSimulators, PMCP
+using POMDPs, POMDPModels, POMDPSimulators, OPS
 
 pomdp = TigerPOMDP()
 
-solver = PMCPSolver(bounds=(-20.0, 0.0))
+solver = OPSSolver(bounds=(-20.0, 0.0))
 planner = solve(solver, pomdp)
 
 for (s, a, o) in stepthrough(pomdp, planner, "s,a,o", max_steps=10)
@@ -36,20 +36,20 @@ For minimal examples of problem implementations, see [this notebook](https://git
 
 ## Solver Options
 
-Solver options can be found in the `PMCPSolver` docstring and accessed using [Julia's built in documentation system](https://docs.julialang.org/en/v1/manual/documentation/#Accessing-Documentation-1) (or directly in the [Solver source code](/src/PMCP.jl)). Each option has its own docstring and can be set with a keyword argument in the `PMCPSolver` constructor.
+Solver options can be found in the `OPSSolver` docstring and accessed using [Julia's built in documentation system](https://docs.julialang.org/en/v1/manual/documentation/#Accessing-Documentation-1) (or directly in the [Solver source code](/src/OPS.jl)). Each option has its own docstring and can be set with a keyword argument in the `OPSSolver` constructor.
 
 ### Bounds
 
 #### Tuple bounds
-The bound passed into `PMCPSolver` can be a tuple of form `(lower_bound, upper_bound)`.
+The bound passed into `OPSSolver` can be a tuple of form `(lower_bound, upper_bound)`.
 #### Function bounds
-The bound passed into `PMCPSolver` can be a function in the form of `lower_bound, upper_bound = f(pomdp, wpf_belief)`.
+The bound passed into `OPSSolver` can be a function in the form of `lower_bound, upper_bound = f(pomdp, wpf_belief)`.
 
 #### Independent bounds
 
 In most cases, the recommended way to specify bounds is with an `IndependentBounds` object, i.e.
 ```julia
-PMCPSolver(bounds=IndependentBounds(lower, upper))
+OPSSolver(bounds=IndependentBounds(lower, upper))
 ```
 where `lower` and `upper` are either a number, a function or some other objects (see below).
 
@@ -81,7 +81,7 @@ function upper(pomdp::BabyPOMDP, b::WPFBelief)
     end
 end
 
-solver = PMCPSolver(bounds=IndependentBounds(lower, upper))
+solver = OPSSolver(bounds=IndependentBounds(lower, upper))
 ```
 
 ## Visualization
@@ -89,11 +89,11 @@ solver = PMCPSolver(bounds=IndependentBounds(lower, upper))
 [D3Trees.jl](https://github.com/sisl/D3Trees.jl) can be used to visualize the search tree, for example
 
 ```julia
-using POMDPs, POMDPModels, POMDPModelTools, D3Trees, PMCP
+using POMDPs, POMDPModels, POMDPModelTools, D3Trees, OPS
 
 pomdp = TigerPOMDP()
 
-solver = PMCPSolver(bounds=(-20.0, 0.0), tree_in_info=true)
+solver = OPSSolver(bounds=(-20.0, 0.0), tree_in_info=true)
 planner = solve(solver, pomdp)
 b0 = initialstate(pomdp)
 

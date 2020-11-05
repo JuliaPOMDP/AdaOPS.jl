@@ -1,4 +1,4 @@
-module PMCP
+module OPS
 
 using POMDPs
 using BeliefUpdaters
@@ -22,8 +22,8 @@ import BasicPOMCP.SolvedPORollout
 import Random.rand
 
 export
-    PMCPSolver,
-    PMCPPlanner,
+    OPSSolver,
+    OPSPlanner,
 
     WPFBelief,
     previous_obs,
@@ -47,7 +47,7 @@ export
     SolvedFORollout
 
 """
-    PMCPSolver(<keyword arguments>)
+    OPSSolver(<keyword arguments>)
 
 Each field may be set via keyword argument. The fields that correspond to algorithm
 parameters match the definitions in the paper exactly.
@@ -68,10 +68,10 @@ parameters match the definitions in the paper exactly.
 - `tree_in_info`
 
 Further information can be found in the field docstrings (e.g.
-`?PMCPSolver.xi`)
+`?OPSSolver.xi`)
 """
-@with_kw mutable struct PMCPSolver{R<:AbstractRNG} <: Solver
-    "The target gap between the upper and the lower bound at the root of the PMCP tree."
+@with_kw mutable struct OPSSolver{R<:AbstractRNG} <: Solver
+    "The target gap between the upper and the lower bound at the root of the OPS tree."
     epsilon_0::Float64                      = 0.0
 
     "The δ-packing of beliefs will be generated."
@@ -114,19 +114,19 @@ Further information can be found in the field docstrings (e.g.
     tree_in_info::Bool                      = false
 end
 
-struct PMCPPlanner{P<:POMDP, B, RNG<:AbstractRNG} <: Policy
-    sol::PMCPSolver
+struct OPSPlanner{P<:POMDP, B, RNG<:AbstractRNG} <: Policy
+    sol::OPSSolver
     pomdp::P
     bounds::B
     discounts::Array{Float64,1}
     rng::RNG
 end
 
-function PMCPPlanner(sol::PMCPSolver, pomdp::POMDP)
+function OPSPlanner(sol::OPSSolver, pomdp::POMDP)
     rng = deepcopy(sol.rng)
     bounds = init_bounds(sol.bounds, pomdp, sol, rng)
     discounts = discount(pomdp) .^[0:sol.D;]
-    return PMCPPlanner(deepcopy(sol), pomdp, bounds, discounts, rng)
+    return OPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng)
 end
 
 include("wpf_belief.jl")

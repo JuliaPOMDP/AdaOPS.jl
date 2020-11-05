@@ -121,7 +121,7 @@ function IndependentBounds(l, u;
     return IndependentBounds(l, u, check_terminal, consistency_fix_thresh)
 end
 
-function init_bounds(bounds::IndependentBounds, pomdp::POMDP, sol::PMCPSolver, rng::R) where R <: AbstractRNG
+function init_bounds(bounds::IndependentBounds, pomdp::POMDP, sol::OPSSolver, rng::R) where R <: AbstractRNG
     return IndependentBounds(init_bound(bounds.lower, pomdp, sol, rng),
                              init_bound(bounds.upper, pomdp, sol, rng),
                              bounds.check_terminal,
@@ -168,7 +168,7 @@ struct FOValueBound{P<:Union{Solver, Policy}}
     p::P
 end
 
-function init_bound(bd::FOValueBound{S}, pomdp::POMDP, sol::PMCPSolver, rng::R) where S <: Solver where R <: AbstractRNG
+function init_bound(bd::FOValueBound{S}, pomdp::POMDP, sol::OPSSolver, rng::R) where S <: Solver where R <: AbstractRNG
     return FOValueBound(solve(bd.p, pomdp))
 end
 
@@ -195,7 +195,7 @@ struct POValueBound{P<:Union{Solver, Policy}}
     p::P
 end
 
-function init_bound(bd::POValueBound{S}, pomdp::POMDP, sol::PMCPSolver, rng::R) where S <: Solver where R <: AbstractRNG
+function init_bound(bd::POValueBound{S}, pomdp::POMDP, sol::OPSSolver, rng::R) where S <: Solver where R <: AbstractRNG
     return POValueBound(solve(bd.p, pomdp))
 end
 
@@ -242,7 +242,7 @@ function RolloutLB(rollout_estimator::Any; max_depth=nothing)
     return RolloutLB(rollout_estimator, max_depth)
 end
 
-function init_bound(lb::RolloutLB, pomdp::POMDP, sol::PMCPSolver, rng::R) where R <: AbstractRNG
+function init_bound(lb::RolloutLB, pomdp::POMDP, sol::OPSSolver, rng::R) where R <: AbstractRNG
     solved_estimator = convert_estimator(lb.rollout_estimator, pomdp, rng)
     max_depth = something(lb.max_depth, sol.D)
     return RolloutLB(solved_estimator, max_depth)

@@ -3,7 +3,7 @@ struct TextTree
     text::Vector{String}
 end
 
-function TextTree(D::PMCPTree)
+function TextTree(D::OPSTree)
     lenb = length(D.children)
     lenba = length(D.ba_children)
     len = lenb + lenba
@@ -32,7 +32,7 @@ struct TreeView
     depth::Int
 end
 
-TreeView(D::PMCPTree, b::Int, depth::Int) = TreeView(TextTree(D), b, depth)
+TreeView(D::OPSTree, b::Int, depth::Int) = TreeView(TextTree(D), b, depth)
 
 Base.show(io::IO, tv::TreeView) = shownode(io, tv.t, tv.root, tv.depth, "", "")
 

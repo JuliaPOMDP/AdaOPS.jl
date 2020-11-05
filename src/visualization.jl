@@ -1,4 +1,4 @@
-function D3Trees.D3Tree(D::PMCPTree; title="PMCP Tree", kwargs...)
+function D3Trees.D3Tree(D::OPSTree; title="OPS Tree", kwargs...)
     lenb = length(D.children)
     lenba = length(D.ba_children)
     len = lenb + lenba
@@ -57,8 +57,8 @@ function D3Trees.D3Tree(D::PMCPTree; title="PMCP Tree", kwargs...)
                  )
 end
 
-Base.show(io::IO, mime::MIME"text/html", D::PMCPTree) = show(io, mime, D3Tree(D))
-Base.show(io::IO, mime::MIME"text/plain", D::PMCPTree) = show(io, mime, D3Tree(D))
+Base.show(io::IO, mime::MIME"text/html", D::OPSTree) = show(io, mime, D3Tree(D))
+Base.show(io::IO, mime::MIME"text/plain", D::OPSTree) = show(io, mime, D3Tree(D))
 
 """
 Fill all the elements of the cache for b and children of b and return L[b]

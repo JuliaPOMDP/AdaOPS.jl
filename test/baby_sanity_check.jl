@@ -1,5 +1,5 @@
 using POMDPs
-using PMCP
+using OPS
 using POMDPToolbox
 using POMDPModels
 using ProgressMeter
@@ -12,7 +12,7 @@ pomdp = BabyPOMDP()
 bounds = IndependentBounds(RolloutLB(PORollout(FeedWhenCrying(),PreviousObservationUpdater())), 0.0)
 # bounds = IndependentBounds(reward(pomdp, false, true)/(1-discount(pomdp)), 0.0)
 
-solver = PMCPSolver(epsilon_0=0.1,
+solver = OPSSolver(epsilon_0=0.1,
                       m=100,
                       D=50,
                       bounds=bounds,
