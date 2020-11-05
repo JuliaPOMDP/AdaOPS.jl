@@ -1,7 +1,7 @@
 name = "OPS"
 uuid = "eadfb9d8-44f1-454c-a5eb-0663ee7d74a1"
 repo = "git@github.com:AutomobilePOMDP/PMCP.jl.git"
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 BasicPOMCP = "d721219e-3fc6-5570-a8ef-e5402f47c49e"

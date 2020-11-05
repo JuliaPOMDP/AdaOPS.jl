@@ -53,7 +53,7 @@ hr = HistoryRecorder(max_steps=2)
 @time hist = simulate(hr, pomdp, planner)
 
 # policy lower bound
-bds = IndependentBounds(RolloutLB(PORollout(FeedWhenCrying(), PreviousObservationUpdater())), 0.0)
+bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
 solver = OPSSolver(bounds=bds)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=2)

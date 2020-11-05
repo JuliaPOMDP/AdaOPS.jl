@@ -15,10 +15,10 @@ using POMDPLinter
 using LinearAlgebra
 
 using MCTS
-using BasicPOMCP # for ExceptionRethrow and NoDecision
-import BasicPOMCP.default_action
-import BasicPOMCP.SolvedFORollout
-import BasicPOMCP.SolvedPORollout
+import MCTS: convert_estimator, convert_to_policy
+import BasicPOMCP: default_action, SolvedFORollout, FORollout,
+                    SolvedPORollout, FOValue, SolvedFOValue,
+                    ExceptionRethrow, NoDecision, convert_estimator
 
 import Random.rand
 
@@ -33,19 +33,16 @@ export
     NoGap,
 
     IndependentBounds,
-    FOValueBound,
-    POValueBound,
-    RolloutLB,
     bounds,
     init_bounds,
-    lbound,
-    ubound,
+    bound,
     init_bound,
 
+
+    FOValue,
+    POValue,
     PORollout,
-    SolvedPORollout,
-    FORollout,
-    SolvedFORollout
+    FORollout
 
 """
     OPSSolver(<keyword arguments>)
