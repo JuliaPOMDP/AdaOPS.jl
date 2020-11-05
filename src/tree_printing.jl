@@ -12,11 +12,11 @@ function TextTree(D::OPSTree)
     text = Vector{String}(len)
     for b in 1:lenb
         children[b] = D.children[b] .+ lenb
-        text[b] = @sprintf("o:%-5s U:%6.2f, L:%6.2f, Effectiveness Indicator:%6.2f",
+        text[b] = @sprintf("o:%-5s U:%6.2f, L:%6.2f, EI:%6.2f",
                            b==1 ? "<root>" : string(D.obs[b]),
                            D.U[b],
                            D.L[b],
-                           1/(m*dot(D.weights[b], D.weights[b])),
+                           sum(D.weights[b])^2/(m*dot(D.weights[b], D.weights[b])),
                             )
     end
     for ba in 1:lenba
