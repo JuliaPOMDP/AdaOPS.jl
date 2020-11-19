@@ -20,17 +20,17 @@ init_bound(bound, pomdp, sol, rng) = bound
 init_bounds(bounds, pomdp, sol, rng) = bounds
 init_bounds(t::Tuple, pomdp, sol, rng) = (init_bound(first(t), pomdp, sol, rng), init_bound(last(t), pomdp, sol, rng))
 
-# Used when lower or upper bound is a fixed number
-bound(n::Number, pomdp, b, max_depth) = convert(Float64, n)
+# Used when the lower or upper bound is a fixed number
+bound(n::Number, pomdp::POMDP, b::WPFBelief, max_depth::Int) = convert(Float64, n)
 
-function bound(n::Number, pomdp, b, wdict, max_depth)
+function bound(n::Number, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
     u = bound(n, pomdp, b, max_depth)
     Dict([o=>u for (o,w) in wdict])
 end
 
-# Used when both lower and upper are fixed numbers
+# Used when both lower and upper bounds are fixed numbers
 function bounds(t::Tuple, pomdp::POMDP, b::WPFBelief, bounds_warning::Bool = true)
-    l, u = bound(t[1], pomdp, b, 5/(1-discount(pomdp))), bound(t[2], pomdp, b, 5/(1-discount(pomdp)))
+    l, u = bound(t[1], pomdp, b, ceil(Int, 5/(1-discount(pomdp)))), bound(t[2], pomdp, b, ceil(Int, 5/(1-discount(pomdp))))
     if bounds_warning
         bounds_sanity_check(pomdp, b, l, u)
     end
@@ -49,10 +49,20 @@ function bounds(t::Tuple, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array
     return bound_dict
 end
 
-# Used when lower or upper bound is a function
-bound(f::Function, pomdp, b, max_depth) = f(pomdp, b)
+# Used when the lower or upper bound is an object for which a `bound` function is implemented
+function bound(bd, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
+    bound_dict = Dict{O, Float64}()
+    for (o, w) in wdict
+        switch_to_sibling!(b, o, w)
+        bound_dict[o] = bound(bd, pomdp, b, max_depth)
+    end
+    return bound_dict
+end
 
-function bound(f::Function, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth) where S where O
+# Used when lower or upper bound is a function
+bound(f::Function, pomdp::POMDP, b::WPFBelief, max_depth::Int) = f(pomdp, b)
+
+function bound(f::Function, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
     bound_dict = Dict{O, Float64}()
     for (o, w) in wdict
         reweight!(b, w)
@@ -110,8 +120,8 @@ function IndependentBounds(l, u;
 end
 
 function init_bounds(bounds::IndependentBounds, pomdp::POMDP, sol::OPSSolver, rng::R) where R <: AbstractRNG
-    return IndependentBounds(convert_estimator(bounds.lower, pomdp, rng),
-                             convert_estimator(bounds.upper, pomdp, rng),
+    return IndependentBounds(convert_estimator(bounds.lower, sol, pomdp),
+                             convert_estimator(bounds.upper, sol, pomdp),
                              bounds.check_terminal,
                              bounds.consistency_fix_thresh,
                              something(bounds.max_depth, sol.D)
@@ -150,11 +160,6 @@ function bounds(bounds::IndependentBounds, pomdp::POMDP, b::WPFBelief, wdict::Di
         bound_dict[o] = (l[o], u[o])
     end
     return bound_dict
-end
-
-mutable struct PORollout{U<:POMDPs.Updater}
-    solver::Union{POMDPs.Solver,POMDPs.Policy,Function}
-    updater::U
 end
 
 struct POValue
@@ -211,18 +216,13 @@ function bound(bd::SolvedPOValue, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Arr
 end
 
 # Convert an unsolved estimator to solved estimator
-function convert_estimator(ev::PORollout, pomdp::POMDP, rng::R) where R <: AbstractRNG
-    policy = MCTS.convert_to_policy(ev.solver, pomdp)
-    SolvedPORollout(policy, ev.updater, rng)
-end
-
-function convert_estimator(ev::FOValue, pomdp::POMDP, rng::R) where R <: AbstractRNG
-    policy = MCTS.convert_to_policy(ev.solver, UnderlyingMDP(pomdp))
+function convert_estimator(est::FOValue, solver::OPSSolver, pomdp::POMDP)
+    policy = MCTS.convert_to_policy(est.solver, UnderlyingMDP(pomdp))
     SolvedFOValue(policy)
 end
 
-function convert_estimator(ev::POValue, pomdp::POMDP, rng::R) where R <: AbstractRNG
-    policy = MCTS.convert_to_policy(ev.solver, pomdp)
+function convert_estimator(est::POValue, solver::OPSSolver, pomdp::POMDP)
+    policy = MCTS.convert_to_policy(est.solver, pomdp)
     SolvedPOValue(policy)
 end
 

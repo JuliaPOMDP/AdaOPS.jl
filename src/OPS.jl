@@ -16,9 +16,8 @@ using LinearAlgebra
 
 using MCTS
 import MCTS: convert_estimator, convert_to_policy
-import BasicPOMCP: default_action, SolvedFORollout, FORollout,
-                    SolvedPORollout, FOValue, SolvedFOValue,
-                    ExceptionRethrow, NoDecision, convert_estimator
+using BasicPOMCP
+import BasicPOMCP: SolvedFORollout, SolvedPORollout, SolvedFOValue, convert_estimator
 
 import Random.rand
 
@@ -42,7 +41,8 @@ export
     FOValue,
     POValue,
     PORollout,
-    FORollout
+    FORollout,
+    RolloutEstimator
 
 """
     OPSSolver(<keyword arguments>)
