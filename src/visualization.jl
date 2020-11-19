@@ -10,16 +10,16 @@ function D3Trees.D3Tree(D::OPSTree; title="OPS Tree", kwargs...)
     for b in 1:lenb
         children[b] = D.children[b] .+ lenb
         text[b] = @sprintf("""
-                           o:%s EI:%6.2f
+                           o:%s ESS:%6.2f
                            L:%6.2f, U:%6.2f""",
                            b==1 ? "<root>" : string(D.obs[b]),
-                           sum(D.weights[b])^2/(m*dot(D.weights[b], D.weights[b])),
+                           sum(D.weights[b])^2/dot(D.weights[b], D.weights[b]),
                            D.L[b],
                            D.U[b],
                           )
         tt[b] = """
                 o: $(b==1 ? "<root>" : string(D.obs[b]))
-                EI: $(sum(D.weights[b])^2/(m*dot(D.weights[b], D.weights[b])))
+                ESS: $(sum(D.weights[b])^2/dot(D.weights[b], D.weights[b]))
                 L: $(D.L[b])
                 U: $(D.U[b])
                 $(length(D.children[b])) children
