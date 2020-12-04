@@ -158,14 +158,6 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             end
         end
 
-        # max_k = 0
-        # for o in keys(wdict)
-        #     if kdict[o] > max_k
-        #         max_k = kdict[o]
-        #     end
-        # end
-        # @show max_k
-
         nbps = length(wdict)
         nparticles = length(next_states)
         last_b = length(D.weights)

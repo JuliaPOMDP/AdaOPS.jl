@@ -16,8 +16,8 @@ function bounds_sanity_check(pomdp::POMDP, b::WPFBelief, L, U)
     end
 end
 
-init_bound(bound, pomdp, sol, rng) = bound
-init_bounds(bounds, pomdp, sol, rng) = bounds
+init_bound(bd, pomdp, sol, rng) = bd
+init_bounds(bds, pomdp, sol, rng) = bds
 init_bounds(t::Tuple, pomdp, sol, rng) = (init_bound(first(t), pomdp, sol, rng), init_bound(last(t), pomdp, sol, rng))
 
 # Used when the lower or upper bound is a fixed number
@@ -37,7 +37,7 @@ function bounds(t::Tuple, pomdp::POMDP, b::WPFBelief, bounds_warning::Bool = tru
     return (l, u)
 end
 
-function bounds(t::Tuple, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, bounds_warning::Bool = true) where S where O
+function bounds(t::Tuple, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, bounds_warning::Bool = true) where {S, O}
     bound_dict = Dict{O, Tuple{Float64, Float64}}()
     l, u = bounds(t, pomdp, b, bounds_warning)
     if bounds_warning
@@ -119,22 +119,22 @@ function IndependentBounds(l, u;
     return IndependentBounds(l, u, check_terminal, consistency_fix_thresh, max_depth)
 end
 
-function init_bounds(bounds::IndependentBounds, pomdp::POMDP, sol::AdaOPSSolver, rng::R) where R <: AbstractRNG
-    return IndependentBounds(convert_estimator(bounds.lower, sol, pomdp),
-                             convert_estimator(bounds.upper, sol, pomdp),
-                             bounds.check_terminal,
-                             bounds.consistency_fix_thresh,
-                             something(bounds.max_depth, sol.D)
+function init_bounds(bds::IndependentBounds, pomdp::POMDP, sol::AdaOPSSolver, rng::R) where R <: AbstractRNG
+    return IndependentBounds(convert_estimator(bds.lower, sol, pomdp),
+                             convert_estimator(bds.upper, sol, pomdp),
+                             bds.check_terminal,
+                             bds.consistency_fix_thresh,
+                             something(bds.max_depth, sol.D)
                             )
 end
 
-function bounds(bounds::IndependentBounds, pomdp::POMDP, b::WPFBelief, bounds_warning::Bool = true)
-    if bounds.check_terminal && all(isterminal(pomdp, s) for s in particles(b))
+function bounds(bds::IndependentBounds, pomdp::POMDP, b::WPFBelief, bounds_warning::Bool = true)
+    if bds.check_terminal && all(isterminal(pomdp, s) for s in particles(b))
         return (0.0, 0.0)
     end
-    l = bound(bounds.lower, pomdp, b, bounds.max_depth)
-    u = bound(bounds.upper, pomdp, b, bounds.max_depth)
-    if u < l && u >= l-bounds.consistency_fix_thresh
+    l = bound(bds.lower, pomdp, b, bds.max_depth)
+    u = bound(bds.upper, pomdp, b, bds.max_depth)
+    if u < l && u >= l-bds.consistency_fix_thresh
         u = l
     end
     if bounds_warning
@@ -143,15 +143,15 @@ function bounds(bounds::IndependentBounds, pomdp::POMDP, b::WPFBelief, bounds_wa
     return (l,u)
 end
 
-function bounds(bounds::IndependentBounds, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Array{Float64,1}}, bounds_warning::Bool = true) where O
-    if bounds.check_terminal && all(isterminal(pomdp, s) for s in b.particles)
-        return (0.0, 0.0)
+function bounds(bds::IndependentBounds, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Array{Float64,1}}, bounds_warning::Bool = true) where O
+    if bds.check_terminal && all(isterminal(pomdp, s) for s in b.particles)
+        return bounds((0.0, 0.0), pomdp, b, wdict, bounds_warning)
     end
-    l = bound(bounds.lower, pomdp, b, wdict, bounds.max_depth)
-    u = bound(bounds.upper, pomdp, b, wdict, bounds.max_depth)
+    l = bound(bds.lower, pomdp, b, wdict, bds.max_depth)
+    u = bound(bds.upper, pomdp, b, wdict, bds.max_depth)
     bound_dict = Dict{O, Tuple{Float64, Float64}}()
     for (o, w) in wdict
-        if u[o] < l[o] && u[o] >= l[o]-bounds.consistency_fix_thresh
+        if u[o] < l[o] && u[o] >= l[o]-bds.consistency_fix_thresh
             u[o] = l[o]
         end
         if bounds_warning
