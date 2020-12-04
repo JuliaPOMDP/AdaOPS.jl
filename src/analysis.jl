@@ -1,82 +1,51 @@
-struct AdaOPSTree{S,A,O}
-    weights::Vector{Vector{Float64}} # stores weights for *belief node*
-    children::Vector{Vector{Int}} # to children *ba nodes*
-    parent::Vector{Int} # maps to the parent *ba node*
-    Delta::Vector{Int}
-    u::Vector{Float64}
-    l::Vector{Float64}
-    obs::Vector{O}
-    obs_prob::Vector{Float64}
-
-    ba_particles::Vector{Vector{S}} # stores particles for *ba nodes*
-    ba_children::Vector{Vector{Int}}
-    ba_parent::Vector{Int} # maps to parent *belief node*
-    ba_u::Vector{Float64}
-    ba_l::Vector{Float64}
-    ba_r::Vector{Float64} # needed for backup
-    ba_action::Vector{A}
-
-    root_belief::WPFBelief
+function tree_analysis(D::AdaOPSTree)
+    mean_particle_number = mean(length(particles) for particles in D.ba_particles)
+    @show mean_particle_number
 end
 
-function AdaOPSTree(p::AdaOPSPlanner, b_0)
-    S = statetype(p.pomdp)
-    A = actiontype(p.pomdp)
-    O = obstype(p.pomdp)
+function find_min_k(p::AdaOPSPlanner, b_0, lower_quantile=0.05)
+    D = AdaOPSTree(p, b_0)
+    b = 1
+    trial = 1
+    start = CPUtime_us()
+    k_list = []
 
-    cnt = zeros_like(p.sol.grid)
-    k = 0
-    m = p.init_m
-    curr_particle_num = 0
-    particle_set = S[]
-
-    while true
-        for i in (curr_particle_num+1):m
-            s = rand(p.rng, b_0)
-            push!(particle_set, s)
-            if access(p.sol.grid, cnt, s, p.pomdp)
-                k += 1
-            end
-        end
-        curr_particle_num = m
-        MESS = k > p.sol.k_min ? p.sol.MESS(k, p.sol.zeta) : p.init_m
-        if m < MESS
-            m = ceil(Int64, MESS)
-        else
-            break
-        end
+    while D.u[1]-D.l[1] > p.sol.epsilon_0 &&
+          CPUtime_us()-start < p.sol.T_max*1e6 &&
+          trial <= p.sol.max_trials
+        b, k = explore_k!(D, 1, p)
+        k_list = [k_list; k]
+        backup!(D, b, p)
+        trial += 1
     end
 
-    root_belief = WPFBelief(particle_set, fill(1/length(particle_set), length(particle_set)), 1.0, 1, 0)
-    l, u = bounds(p.bounds, p.pomdp, root_belief, p.sol.bounds_warnings)
-
-    return AdaOPSTree{S,A,O}([root_belief.weights],
-                         [Int[]],
-                         [0],
-                         [0],
-                         [u],
-                         [l],
-                         Vector{O}(undef, 1),
-                         [1.0],
-
-                         [],
-                         [],
-                         Int[],
-                         Float64[],
-                         Float64[],
-                         Float64[],
-                         A[],
-
-                         root_belief
-                 )
+    return D, quantile(k_list, lower_quantile)
 end
 
-function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
+function explore_k!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
+    k_list = []
+    while D.Delta[b] <= p.sol.D &&
+        excess_uncertainty(D, b, p) > 0.0
+        if isempty(D.children[b]) # a leaf
+            k = expand_k!(D, b, p)
+            k_list = [k_list; k]
+        end
+        b = next_best(D, b, p)
+    end
+
+    if D.Delta[b] > p.sol.D
+        make_default!(D, b)
+    end
+    return b, k_list
+end
+
+function expand_k!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     S = statetype(p.pomdp)
     A = actiontype(p.pomdp)
     O = obstype(p.pomdp)
     b = get_wpfbelief(D, b)
     b_resample = resample(b, p.init_m, p.rng)
+    k_list = []
 
     for a in actions(p.pomdp, b)
         next_states = S[]
@@ -139,7 +108,7 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             satisfied = true
             for o in keys(wdict)
                 ESS = likelihood_sum_dict[o]*likelihood_sum_dict[o]/likelihood_square_sum_dict[o]
-                MESS = kdict[o] > p.sol.k_min ? p.sol.MESS(kdict[o], p.sol.zeta) : p.init_m
+                MESS = p.sol.MESS(max(kdict[o], p.sol.k_min), p.sol.zeta)
                 # MESS = p.sol.MESS(max(kdict[o], p.sol.k_min), p.sol.zeta*curr_particle_num/(fdict[o]*length(wdict)))
                 if ESS < MESS
                     satisfied = false
@@ -157,14 +126,14 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                 resample!(b_resample, b, m - n_particles(b_resample), p.rng)
             end
         end
-
-        # max_k = 0
-        # for o in keys(wdict)
-        #     if kdict[o] > max_k
-        #         max_k = kdict[o]
-        #     end
-        # end
-        # @show max_k
+        @show m
+        k_max = 0
+        for o in keys(wdict)
+            if kdict[o] > k_max
+                k_max = kdict[o]
+            end
+        end
+        push!(k_list, k_max)
 
         nbps = length(wdict)
         nparticles = length(next_states)
@@ -194,23 +163,5 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         push!(D.ba_l, D.ba_r[ba] + sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba]))
         push!(D.ba_u, D.ba_r[ba] + sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba]))
     end
-end
-
-function Base.resize!(D::AdaOPSTree, n::Int)
-    resize!(D.weights, n)
-    resize!(D.children, n)
-    resize!(D.parent, n)
-    resize!(D.Delta, n)
-    resize!(D.u, n)
-    resize!(D.l, n)
-    resize!(D.obs, n)
-    resize!(D.obs_prob, n)
-end
-
-function get_wpfbelief(D::AdaOPSTree, b::Int)
-    if b == 1
-        return D.root_belief
-    else
-        return WPFBelief(D.ba_particles[D.parent[b]], D.weights[b], b, D.Delta[b], D, D.obs[b])
-    end
+    return k_list
 end

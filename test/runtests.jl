@@ -1,4 +1,4 @@
-using OPS
+using AdaOPS
 using Test
 
 using POMDPs
@@ -47,44 +47,59 @@ pomdp = BabyPOMDP()
 
 # constant bounds
 bds = (reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
-solver = OPSSolver(bounds=bds)
+solver = AdaOPSSolver(bounds=bds, k_min=2, zeta=0.04)
 planner = solve(solver, pomdp)
-hr = HistoryRecorder(max_steps=2)
+hr = HistoryRecorder(max_steps=100)
 @time hist = simulate(hr, pomdp, planner)
+println("Discounted reward is $(discounted_reward(hist))")
 
-# policy lower bound
-bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
-solver = OPSSolver(bounds=bds)
+# FO policy lower bound
+bds = IndependentBounds(FORollout(FeedWhenCrying()), 0.0)
+solver = AdaOPSSolver(bounds=bds, k_min=2, zeta=0.04)
 planner = solve(solver, pomdp)
-hr = HistoryRecorder(max_steps=2)
+hr = HistoryRecorder(max_steps=100)
 @time hist = simulate(hr, pomdp, planner)
+println("Discounted reward is $(discounted_reward(hist))")
+
+# PO policy lower bound
+bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
+solver = AdaOPSSolver(bounds=bds, k_min=2, zeta=0.04)
+planner = solve(solver, pomdp)
+hr = HistoryRecorder(max_steps=100)
+@time hist = simulate(hr, pomdp, planner)
+println("Discounted reward is $(discounted_reward(hist))")
 
 # Type stability
 pomdp = BabyPOMDP()
 bds = IndependentBounds(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
-solver = OPSSolver(epsilon_0=0.1,
+solver = AdaOPSSolver(epsilon_0=0.1,
                       bounds=bds,
-                      rng=MersenneTwister(4)
+                      rng=MersenneTwister(4),
+                      k_min=2,
+                      zeta=0.04
                      )
 p = solve(solver, pomdp)
 
 b0 = initialstate(pomdp)
-D = @inferred OPS.build_tree(p, b0)
-@inferred OPS.explore!(D, 1, p)
-@inferred OPS.expand!(D, length(D.children), p)
-@inferred OPS.make_default!(D, length(D.children))
-@inferred OPS.backup!(D, 1, p)
-@inferred OPS.next_best(D, 1, p)
-@inferred OPS.excess_uncertainty(D, 1, p)
+D = @inferred AdaOPS.build_tree(p, b0)
+tree_analysis(D)
+@inferred AdaOPS.explore!(D, 1, p)
+# @inferred AdaOPS.expand!(D, length(D.children), p)
+@inferred AdaOPS.make_default!(D, length(D.children))
+@inferred AdaOPS.backup!(D, 1, p)
+@inferred AdaOPS.next_best(D, 1, p)
+@inferred AdaOPS.excess_uncertainty(D, 1, p)
 @inferred action(p, b0)
 
 
 bds = IndependentBounds(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
 rng = MersenneTwister(4)
-solver = OPSSolver(epsilon_0=0.1,
+solver = AdaOPSSolver(epsilon_0=0.1,
                       bounds=bds,
                       rng=rng,
-                      tree_in_info=true
+                      tree_in_info=true,
+                      k_min=2,
+                      zeta=0.04
                      )
 p = solve(solver, pomdp)
 a = action(p, initialstate(pomdp))
@@ -95,11 +110,11 @@ a, info = action_info(p, initialstate(pomdp))
 show(stdout, MIME("text/plain"), info[:tree])
 
 # from README:
-using POMDPs, POMDPModels, POMDPSimulators, OPS
+using POMDPs, POMDPModels, POMDPSimulators, AdaOPS
 
 pomdp = TigerPOMDP()
 
-solver = OPSSolver(bounds=(-20.0, 0.0))
+solver = AdaOPSSolver(bounds=(-20.0, 0.0), k_min=2, zeta=0.04)
 planner = solve(solver, pomdp)
 
 for (s, a, o) in stepthrough(pomdp, planner, "s,a,o", max_steps=10)

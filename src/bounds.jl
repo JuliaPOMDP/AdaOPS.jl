@@ -65,7 +65,7 @@ bound(f::Function, pomdp::POMDP, b::WPFBelief, max_depth::Int) = f(pomdp, b)
 function bound(f::Function, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
     bound_dict = Dict{O, Float64}()
     for (o, w) in wdict
-        reweight!(b, w)
+        switch_to_sibling!(b, o, w)
         bound_dict[o] = bound(f, pomdp, b, max_depth)
     end
     return bound_dict
@@ -83,7 +83,7 @@ end
 function bounds(f::Function, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, bounds_warning::Bool) where S where O
     bound_dict = Dict{O, Tuple{Float64, Float64}}()
     for (o, w) in wdict
-        reweight!(b, w)
+        switch_to_sibling!(b, o, w)
         l, u = bounds(f, pomdp, b, bounds_warning)
         if bounds_warning
             bounds_sanity_check(pomdp, b, l, u)
@@ -119,7 +119,7 @@ function IndependentBounds(l, u;
     return IndependentBounds(l, u, check_terminal, consistency_fix_thresh, max_depth)
 end
 
-function init_bounds(bounds::IndependentBounds, pomdp::POMDP, sol::OPSSolver, rng::R) where R <: AbstractRNG
+function init_bounds(bounds::IndependentBounds, pomdp::POMDP, sol::AdaOPSSolver, rng::R) where R <: AbstractRNG
     return IndependentBounds(convert_estimator(bounds.lower, sol, pomdp),
                              convert_estimator(bounds.upper, sol, pomdp),
                              bounds.check_terminal,
@@ -209,19 +209,19 @@ bound(bd::SolvedPOValue, pomdp::POMDP, b::WPFBelief, max_depth::Int) = value(bd.
 function bound(bd::SolvedPOValue, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where O
     bound_dict = Dict{O, Float64}()
     for (o, w) in wdict
-        reweight!(b, w)
+        switch_to_sibling!(b, o, w)
         bound_dict[o] = value(bd.policy, b)
     end
     return bound_dict
 end
 
 # Convert an unsolved estimator to solved estimator
-function convert_estimator(est::FOValue, solver::OPSSolver, pomdp::POMDP)
+function convert_estimator(est::FOValue, solver::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, UnderlyingMDP(pomdp))
     SolvedFOValue(policy)
 end
 
-function convert_estimator(est::POValue, solver::OPSSolver, pomdp::POMDP)
+function convert_estimator(est::POValue, solver::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, pomdp)
     SolvedPOValue(policy)
 end

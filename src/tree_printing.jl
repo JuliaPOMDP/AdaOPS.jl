@@ -3,7 +3,7 @@ struct TextTree
     text::Vector{String}
 end
 
-function TextTree(D::OPSTree)
+function TextTree(D::AdaOPSTree)
     lenb = length(D.children)
     lenba = length(D.ba_children)
     len = lenb + lenba
@@ -12,16 +12,16 @@ function TextTree(D::OPSTree)
     text = Vector{String}(len)
     for b in 1:lenb
         children[b] = D.children[b] .+ lenb
-        text[b] = @sprintf("o:%-5s U:%6.2f, L:%6.2f, ESS:%6.2f",
+        text[b] = @sprintf("o:%-5s u:%6.2f, l:%6.2f, ESS:%6.2f",
                            b==1 ? "<root>" : string(D.obs[b]),
-                           D.U[b],
-                           D.L[b],
+                           D.u[b],
+                           D.l[b],
                            sum(D.weights[b])^2/(dot(D.weights[b], D.weights[b])),
                             )
     end
     for ba in 1:lenba
         children[ba+lenb] = D.ba_children[ba]
-        text[ba+lenb] = @sprintf("a:%-5s L:%6.2f U:%6.2f, r:%6.2f", D.ba_action[ba], D.ba_L[ba], D.ba_U[ba], D.ba_Rsum[ba]/m)
+        text[ba+lenb] = @sprintf("a:%-5s l:%6.2f u:%6.2f, r:%6.2f", D.ba_action[ba], D.ba_l[ba], D.ba_u[ba], D.ba_r[ba])
     end
     return TextTree(children, text)
 end
@@ -32,7 +32,7 @@ struct TreeView
     depth::Int
 end
 
-TreeView(D::OPSTree, b::Int, depth::Int) = TreeView(TextTree(D), b, depth)
+TreeView(D::AdaOPSTree, b::Int, depth::Int) = TreeView(TextTree(D), b, depth)
 
 Base.show(io::IO, tv::TreeView) = shownode(io, tv.t, tv.root, tv.depth, "", "")
 

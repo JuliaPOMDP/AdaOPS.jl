@@ -1,4 +1,4 @@
-function D3Trees.D3Tree(D::OPSTree; title="OPS Tree", kwargs...)
+function D3Trees.D3Tree(D::AdaOPSTree; title="AdaOPS Tree", kwargs...)
     lenb = length(D.children)
     lenba = length(D.ba_children)
     len = lenb + lenba
@@ -11,17 +11,17 @@ function D3Trees.D3Tree(D::OPSTree; title="OPS Tree", kwargs...)
         children[b] = D.children[b] .+ lenb
         text[b] = @sprintf("""
                            o:%s ESS:%6.2f
-                           L:%6.2f, U:%6.2f""",
+                           l:%6.2f, u:%6.2f""",
                            b==1 ? "<root>" : string(D.obs[b]),
                            sum(D.weights[b])^2/dot(D.weights[b], D.weights[b]),
-                           D.L[b],
-                           D.U[b],
+                           D.l[b],
+                           D.u[b],
                           )
         tt[b] = """
                 o: $(b==1 ? "<root>" : string(D.obs[b]))
                 ESS: $(sum(D.weights[b])^2/dot(D.weights[b], D.weights[b]))
-                L: $(D.L[b])
-                U: $(D.U[b])
+                l: $(D.l[b])
+                u: $(D.u[b])
                 $(length(D.children[b])) children
                 """
         link_width = 2.0
@@ -34,15 +34,15 @@ function D3Trees.D3Tree(D::OPSTree; title="OPS Tree", kwargs...)
             children[ba+lenb] = D.ba_children[ba]
             text[ba+lenb] = @sprintf("""
                                      a:%s r:%6.2f
-                                     L:%6.2f, U:%6.2f""",
-                                     D.ba_action[ba], D.ba_Rsum[ba]/m,
-                                     D.ba_L[ba], D.ba_U[ba],
+                                     l:%6.2f, u:%6.2f""",
+                                     D.ba_action[ba], D.ba_r[ba],
+                                     D.ba_l[ba], D.ba_u[ba],
                                      )
             tt[ba+lenb] = """
                           a: $(D.ba_action[ba])
-                          r: $(D.ba_Rsum[ba]/m)
-                          L: $(D.ba_L[ba])
-                          U: $(D.ba_U[ba])
+                          r: $(D.ba_r[ba])
+                          l: $(D.ba_l[ba])
+                          u: $(D.ba_u[ba])
                           $(length(D.ba_children[ba])) children
                           """
         end
@@ -57,9 +57,5 @@ function D3Trees.D3Tree(D::OPSTree; title="OPS Tree", kwargs...)
                  )
 end
 
-Base.show(io::IO, mime::MIME"text/html", D::OPSTree) = show(io, mime, D3Tree(D))
-Base.show(io::IO, mime::MIME"text/plain", D::OPSTree) = show(io, mime, D3Tree(D))
-
-"""
-Fill all the elements of the cache for b and children of b and return L[b]
-"""
+Base.show(io::IO, mime::MIME"text/html", D::AdaOPSTree) = show(io, mime, D3Tree(D))
+Base.show(io::IO, mime::MIME"text/plain", D::AdaOPSTree) = show(io, mime, D3Tree(D))

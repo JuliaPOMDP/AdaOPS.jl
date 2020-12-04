@@ -1,4 +1,4 @@
-module OPS
+module AdaOPS
 
 using POMDPs
 using BeliefUpdaters
@@ -13,6 +13,7 @@ using POMDPSimulators
 using POMDPPolicies
 using POMDPLinter
 using LinearAlgebra
+using Distributions
 
 using MCTS
 import MCTS: convert_estimator, convert_to_policy
@@ -22,8 +23,9 @@ import BasicPOMCP: SolvedFORollout, SolvedPORollout, SolvedFOValue, convert_esti
 import Random.rand
 
 export
-    OPSSolver,
-    OPSPlanner,
+    AdaOPSSolver,
+    AdaOPSPlanner,
+    AdaOPSTree,
 
     WPFBelief,
     previous_obs,
@@ -42,10 +44,19 @@ export
     POValue,
     PORollout,
     FORollout,
-    RolloutEstimator
+    RolloutEstimator,
+
+    StateGrid,
+    KLDSampleSize,
+
+    tree_analysis,
+    find_min_k
+
+include("grid.jl")
+include("Sampling.jl")
 
 """
-    OPSSolver(<keyword arguments>)
+    AdaOPSSolver(<keyword arguments>)
 
 Each field may be set via keyword argument. The fields that correspond to algorithm
 parameters match the definitions in the paper exactly.
@@ -66,23 +77,29 @@ parameters match the definitions in the paper exactly.
 - `tree_in_info`
 
 Further information can be found in the field docstrings (e.g.
-`?OPSSolver.xi`)
+`?AdaOPSSolver.xi`)
 """
-@with_kw mutable struct OPSSolver{R<:AbstractRNG} <: Solver
-    "The target gap between the upper and the lower bound at the root of the OPS tree."
+@with_kw mutable struct AdaOPSSolver{R<:AbstractRNG} <: Solver
+    "The target gap between the upper and the lower bound at the root of the AdaOPS tree."
     epsilon_0::Float64                      = 0.0
 
     "The δ-packing of beliefs will be generated."
-    delta::Float64                          = 0.5
+    delta::Float64                          = 0.2
 
-    "The rate of target gap reduction."
+    "The target error for belief estimation."
+    zeta::Float64                           = 0.1
+
+    "The minimum relative gap required for a branch to be expanded."
     xi::Float64                             = 0.95
 
-    "The number of particles in the weighted particle filter."
-    m::Int                                  = 100
+    "State grid for adaptive particle filters"
+    grid::Union{Nothing, StateGrid}         = nothing
 
-    "Resampler"
-    r::Any                                  = LowVarianceResampler(m)
+    "The minimum number of different tiles in the grid occupied by a belief."
+    k_min::Int                              = 5
+
+    "Return the minimum effective sample size needed for accurate estimation"
+    MESS::Function                          = KLDSampleSize
 
     "The maximum depth of the DESPOT."
     D::Int                                  = 90
@@ -112,19 +129,21 @@ Further information can be found in the field docstrings (e.g.
     tree_in_info::Bool                      = false
 end
 
-struct OPSPlanner{P<:POMDP, B, RNG<:AbstractRNG} <: Policy
-    sol::OPSSolver
+struct AdaOPSPlanner{P<:POMDP, B, RNG<:AbstractRNG} <: Policy
+    sol::AdaOPSSolver
     pomdp::P
     bounds::B
+    init_m::Int
     discounts::Array{Float64,1}
     rng::RNG
 end
 
-function OPSPlanner(sol::OPSSolver, pomdp::POMDP)
+function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
     rng = deepcopy(sol.rng)
     bounds = init_bounds(sol.bounds, pomdp, sol, rng)
-    discounts = discount(pomdp) .^[0:sol.D;]
-    return OPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng)
+    init_m = ceil(Int64, sol.MESS(sol.k_min, sol.zeta))
+    discounts = discount(pomdp) .^[0:(sol.D+1);]
+    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, init_m, discounts, rng)
 end
 
 include("wpf_belief.jl")
@@ -136,5 +155,7 @@ include("pomdps_glue.jl")
 
 include("visualization.jl")
 include("exceptions.jl")
+
+include("analysis.jl")
 
 end # module

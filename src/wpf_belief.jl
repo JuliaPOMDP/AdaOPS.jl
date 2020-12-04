@@ -9,9 +9,9 @@ mutable struct WPFBelief{S, O} <: AbstractParticleBelief{S}
     _probs::Union{Nothing, Dict{S,Float64}}
     _hist::Union{Nothing, Array{NamedTuple,1}}
 end
-WPFBelief(particles::Array, weights::Array{Float64,1}, weight_sum::Float64, belief::Union{Int,Nothing}, depth::Int, tree, obs) = WPFBelief(particles, weights, weight_sum, belief, depth, tree, obs, nothing, nothing)
+WPFBelief(particles::Array, weights::Array{Float64,1}, weight_sum::Number, belief::Union{Int,Nothing}, depth::Int, tree, obs) = WPFBelief(particles, weights, convert(Float64, weight_sum), belief, depth, tree, obs, nothing, nothing)
 WPFBelief(particles::Array, weights::Array{Float64,1}, belief::Union{Int,Nothing}, depth::Int, tree, obs) = WPFBelief(particles, weights, sum(weights), belief, depth, tree, obs, nothing, nothing)
-WPFBelief(particles::Array, weights::Array{Float64,1}, weight_sum::Float64, belief::Union{Int,Nothing}, depth::Int) = WPFBelief(particles, weights, weight_sum, belief, depth, nothing, nothing) 
+WPFBelief(particles::Array, weights::Array{Float64,1}, weight_sum::Number, belief::Union{Int,Nothing}, depth::Int) = WPFBelief(particles, weights, weight_sum, belief, depth, nothing, nothing) 
 WPFBelief(particles::Array, weights::Array{Float64,1}, belief::Union{Int,Nothing}, depth::Int) = WPFBelief(particles, weights, belief, depth, nothing, nothing) 
 WPFBelief(particles::Array, weights::Array{Float64,1}, obs; depth::Int = 0) = WPFBelief(particles, weights, nothing, depth, nothing, obs)
 
@@ -49,17 +49,43 @@ function POMDPs.history(belief::WPFBelief)
 end
 initialize_belief(::PreviousObservationUpdater, b::WPFBelief) = b._obs
 
-function resample(b::WPFBelief, p::OPSPlanner)
-    particle_collection = ParticleFilters.resample(p.sol.r, b, p.rng)
-    return WPFBelief(particles(particle_collection), fill(1/p.sol.m, p.sol.m), 1.0, b.belief, b.depth, b.tree, b._obs)
+function resample(b::WPFBelief{S}, m::Int, rng::AbstractRNG) where {S}
+    particle_set = Array{S}(undef, m)
+    r = rand(rng)*weight_sum(b)/m
+    c = weight(b,1)
+    i = 1
+    U = r
+    for particle in 1:m
+        while U > c
+            i += 1
+            c += weight(b, i)
+        end
+        U += weight_sum(b)/m
+        particle_set[particle] = particles(b)[i]
+    end
+    return WPFBelief(particle_set, fill(1.0, m), m, b.belief, b.depth, b.tree, b._obs)
 end
 
-function resample!(b::WPFBelief, p::OPSPlanner)
-    particle_collection = ParticleFilters.resample(p.sol.r, b, p.rng)
-    b.particles = particles(particle_collection)
-    b.weights = fill(1/p.sol.m, p.sol.m)
-    b.weight_sum = 1.0
-    b._probs = nothing
+function resample!(b_resample::WPFBelief, b::WPFBelief, m::Int, rng::AbstractRNG)
+    start_ind = n_particles(b_resample) + 1
+    end_ind = n_particles(b_resample) + m
+    resize!(b_resample.particles, end_ind)
+    resize!(b_resample.weights, end_ind)
+    r = rand(rng)*weight_sum(b)/m
+    c = weight(b,1)
+    i = 1
+    U = r
+    for particle in start_ind:end_ind
+        while U > c
+            i += 1
+            c += weight(b, i)
+        end
+        U += weight_sum(b)/m
+        b_resample.particles[particle] = particles(b)[i]
+    end
+    b_resample.weights[start_ind:end_ind] .= 1.0
+    b_resample.weight_sum = end_ind
+    b_resample._probs = nothing
     return nothing::Nothing
 end
 
@@ -91,11 +117,4 @@ function ParticleFilters.probdict(b::WPFBelief{S, O}) where S where O
         b._probs = probs
     end
     return b._probs
-end
-
-function reweight!(b::WPFBelief, weights::Array{Float64, 1})
-    b.weights = weights
-    b.weight_sum = sum(weights)
-    b._probs = nothing
-    return nothing::Nothing
 end

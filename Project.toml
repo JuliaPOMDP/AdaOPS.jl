@@ -1,13 +1,14 @@
-name = "OPS"
+name = "AdaOPS"
 uuid = "eadfb9d8-44f1-454c-a5eb-0663ee7d74a1"
-repo = "git@github.com:AutomobilePOMDP/PMCP.jl.git"
-version = "0.1.1"
+repo = "git@github.com:AutomobilePOMDP/AdaOPS.jl.git"
+version = "0.2.0"
 
 [deps]
 BasicPOMCP = "d721219e-3fc6-5570-a8ef-e5402f47c49e"
 BeliefUpdaters = "8bb6e9a1-7d73-552c-a44a-e5dc5634aac4"
 CPUTime = "a9c8d775-2e2e-55fc-8582-045d282d599e"
 D3Trees = "e3df1716-f71e-5df9-9e2d-98e193103c45"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MCTS = "e12ccd36-dcad-5f33-8774-9175229e7b33"
 POMDPLinter = "f3bd98c0-eb40-45e2-9eb1-f2763262d755"

@@ -1,10 +1,10 @@
-function build_tree(p::OPSPlanner, b_0)
-    D = OPSTree(p, b_0)
+function build_tree(p::AdaOPSPlanner, b_0)
+    D = AdaOPSTree(p, b_0)
     b = 1
     trial = 1
     start = CPUtime_us()
 
-    while D.U[1]-D.L[1] > p.sol.epsilon_0 &&
+    while D.u[1]-D.l[1] > p.sol.epsilon_0 &&
           CPUtime_us()-start < p.sol.T_max*1e6 &&
           trial <= p.sol.max_trials
         b = explore!(D, 1, p)
@@ -15,7 +15,7 @@ function build_tree(p::OPSPlanner, b_0)
     return D
 end
 
-function explore!(D::OPSTree, b::Int, p::OPSPlanner)
+function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     while D.Delta[b] <= p.sol.D &&
         excess_uncertainty(D, b, p) > 0.0
         if isempty(D.children[b]) # a leaf
@@ -30,31 +30,32 @@ function explore!(D::OPSTree, b::Int, p::OPSPlanner)
     return b
 end
 
-function make_default!(D::OPSTree, b::Int)
-    D.U[b] = D.L[b]
+function make_default!(D::AdaOPSTree, b::Int)
+    D.u[b] = D.l[b]
 end
 
-function backup!(D::OPSTree, b::Int, p::OPSPlanner)
+function backup!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     # Note: maybe this could be sped up by just calculating the change in the one mu and l corresponding to bp, rather than summing up over all bp
     while b != 1
         ba = D.parent[b]
         b = D.ba_parent[ba]
 
-        D.ba_U[ba] = (D.ba_Rsum[ba] + discount(p.pomdp) * sum(D.U[bp] * D.obs_freq[bp] for bp in D.ba_children[ba]))/p.sol.m
-        D.ba_L[ba] = (D.ba_Rsum[ba] + discount(p.pomdp) * sum(D.L[bp] * D.obs_freq[bp] for bp in D.ba_children[ba]))/p.sol.m
+        nbps = length(D.ba_children[ba])
+        D.ba_u[ba] = D.ba_r[ba] + sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
+        D.ba_l[ba] = D.ba_r[ba] + sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
 
-        D.U[b] = maximum(D.ba_U[ba] for ba in D.children[b])
-        D.L[b] = maximum(D.ba_L[ba] for ba in D.children[b])
+        D.u[b] = maximum(D.ba_u[ba] for ba in D.children[b])
+        D.l[b] = maximum(D.ba_l[ba] for ba in D.children[b])
     end
 end
 
-function next_best(D::OPSTree, b::Int, p::OPSPlanner)
-    max_U = -Inf
+function next_best(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
+    max_u = -Inf
     best_ba = first(D.children[b])
     for ba in D.children[b]
-        U = D.ba_U[ba]
-        if U > max_U
-            max_U = U
+        u = D.ba_u[ba]
+        if u > max_u
+            max_u = u
             best_ba = ba
         end
     end
@@ -77,6 +78,6 @@ function next_best(D::OPSTree, b::Int, p::OPSPlanner)
     # return D.ba_children[ba][zi]
 end
 
-function excess_uncertainty(D::OPSTree, b::Int, p::OPSPlanner)
-    return D.U[b]-D.L[b] - p.sol.xi * (D.U[1]-D.L[1]) / p.discounts[D.Delta[b]+1]
+function excess_uncertainty(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
+    return D.obs_prob[b] * (D.u[b]-D.l[b] - p.sol.xi * (D.u[1]-D.l[1]) / p.discounts[D.Delta[b]+1])
 end
