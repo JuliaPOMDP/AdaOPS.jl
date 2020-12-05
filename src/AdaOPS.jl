@@ -49,8 +49,8 @@ export
     StateGrid,
     KLDSampleSize,
 
-    tree_analysis,
-    find_min_k
+    extra_info_analysis,
+    build_tree_test
 
 include("grid.jl")
 include("Sampling.jl")

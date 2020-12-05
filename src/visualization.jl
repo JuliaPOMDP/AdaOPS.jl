@@ -10,16 +10,14 @@ function D3Trees.D3Tree(D::AdaOPSTree; title="AdaOPS Tree", kwargs...)
     for b in 1:lenb
         children[b] = D.children[b] .+ lenb
         text[b] = @sprintf("""
-                           o:%s ESS:%6.2f
+                           o:%s
                            l:%6.2f, u:%6.2f""",
                            b==1 ? "<root>" : string(D.obs[b]),
-                           sum(D.weights[b])^2/dot(D.weights[b], D.weights[b]),
                            D.l[b],
                            D.u[b],
                           )
         tt[b] = """
                 o: $(b==1 ? "<root>" : string(D.obs[b]))
-                ESS: $(sum(D.weights[b])^2/dot(D.weights[b], D.weights[b]))
                 l: $(D.l[b])
                 u: $(D.u[b])
                 $(length(D.children[b])) children

@@ -28,14 +28,18 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
     k = 0
     m = p.init_m
     curr_particle_num = 0
-    particle_set = S[]
+    weight_dict = Dict{S, Float64}()
 
     while true
         for i in (curr_particle_num+1):m
             s = rand(p.rng, b_0)
-            push!(particle_set, s)
-            if access(p.sol.grid, cnt, s, p.pomdp)
-                k += 1
+            if haskey(weight_dict, s)
+                weight_dict[s] += 1.0
+            else
+                weight_dict[s] = 1.0
+                if access(p.sol.grid, cnt, s, p.pomdp)
+                    k += 1
+                end
             end
         end
         curr_particle_num = m
@@ -47,7 +51,7 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
         end
     end
 
-    root_belief = WPFBelief(particle_set, fill(1/length(particle_set), length(particle_set)), 1.0, 1, 0)
+    root_belief = WPFBelief(collect(keys(weight_dict)), collect(values(weight_dict)), m, 1, 0)
     l, u = bounds(p.bounds, p.pomdp, root_belief, p.sol.bounds_warnings)
 
     return AdaOPSTree{S,A,O}([root_belief.weights],
@@ -80,6 +84,8 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
 
     for a in actions(p.pomdp, b)
         next_states = S[]
+        all_states = S[]
+        state_ind_dict = Dict{S, Int}()
         Rsum = 0.0
         wdict = Dict{O, Array{Float64,1}}() # weights of child beliefs
         fdict = Dict{O, Int}() # frequency of observations
@@ -94,29 +100,50 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         curr_particle_num = 0
 
         while true
-            for s in b_resample.particles[curr_particle_num+1:m]
+            resize!(all_states, m)
+            for (i, s) in enumerate(b_resample.particles[curr_particle_num+1:m])
                 if !isterminal(p.pomdp, s)
                     sp, o, r = @gen(:sp, :o, :r)(p.pomdp, s, a, p.rng)
                     Rsum += r
-                    push!(next_states, sp)
-                    for o in keys(wdict)
-                        likelihood = obs_weight(p.pomdp, s, a, sp, o)
-                        push!(wdict[o], likelihood)
-                        likelihood_sum_dict[o] += likelihood
-                        likelihood_square_sum_dict[o] += likelihood * likelihood
+                    all_states[curr_particle_num+i] = sp
+                    if haskey(state_ind_dict, sp)
+                        state_ind = state_ind_dict[sp]
+                        for o in keys(wdict)
+                            likelihood = obs_weight(p.pomdp, s, a, sp, o)
+                            wdict[o][state_ind] += likelihood
+                            likelihood_sum_dict[o] += likelihood
+                            likelihood_square_sum_dict[o] += likelihood * likelihood
+                        end
+                    else
+                        push!(next_states, sp)
+                        state_ind_dict[sp] = length(next_states)
+                        for o in keys(wdict)
+                            likelihood = obs_weight(p.pomdp, s, a, sp, o)
+                            push!(wdict[o], likelihood)
+                            likelihood_sum_dict[o] += likelihood
+                            likelihood_square_sum_dict[o] += likelihood * likelihood
+                        end
                     end
                     if haskey(wdict, o)
                         fdict[o] += 1
                     else
-                        w_temp = Float64[]
-                        for i in 1:length(next_states)
-                            push!(w_temp, obs_weight(p.pomdp, b_resample.particles[i], a, next_states[i], o))
+                        w_temp = zeros(length(next_states))
+                        likelihood_sum = 0.0
+                        likelihood_square_sum = 0.0
+                        for j in 1:(curr_particle_num+i)
+                            likelihood = obs_weight(p.pomdp, b_resample.particles[j], a, all_states[j], o)
+                            likelihood_sum += likelihood
+                            likelihood_square_sum += likelihood * likelihood
+                            state_ind = state_ind_dict[all_states[j]]
+                            w_temp[state_ind] += likelihood
                         end
-                        for (o1, w1) in wdict
-                            if norm(w1-w_temp, 1) <= p.sol.delta
-                                o = o1
-                                w = w1
-                                break
+                        if p.sol.delta > 0.0
+                            for (o1, w1) in wdict
+                                if norm(w1-w_temp, 1) <= p.sol.delta
+                                    o = o1
+                                    w = w1
+                                    break
+                                end
                             end
                         end
                         if haskey(wdict, o)
@@ -126,11 +153,11 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                             wdict[o] = w_temp
                             cnt_dict[o] = zeros_like(p.sol.grid)
                             kdict[o] = 0
-                            likelihood_sum_dict[o] = sum(w_temp)
-                            likelihood_square_sum_dict[o] = dot(w_temp, w_temp)
+                            likelihood_sum_dict[o] = likelihood_sum
+                            likelihood_square_sum_dict[o] = likelihood_square_sum
                         end
                     end
-                    if access(p.sol.grid, cnt_dict[o], s, p.pomdp)
+                    if access(p.sol.grid, cnt_dict[o], sp, p.pomdp)
                         kdict[o] += 1
                     end
                 end
@@ -140,7 +167,6 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             for o in keys(wdict)
                 ESS = likelihood_sum_dict[o]*likelihood_sum_dict[o]/likelihood_square_sum_dict[o]
                 MESS = kdict[o] > p.sol.k_min ? p.sol.MESS(kdict[o], p.sol.zeta) : p.init_m
-                # MESS = p.sol.MESS(max(kdict[o], p.sol.k_min), p.sol.zeta*curr_particle_num/(fdict[o]*length(wdict)))
                 if ESS < MESS
                     satisfied = false
                     temp_m = curr_particle_num*MESS/ESS
@@ -164,7 +190,7 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         push!(D.ba_particles, next_states)
         push!(D.ba_children, [last_b+1:last_b+nbps;])
         push!(D.ba_parent, b.belief)
-        push!(D.ba_r, Rsum / nparticles)
+        push!(D.ba_r, Rsum / m)
         push!(D.ba_action, a)
         ba = length(D.ba_particles)
         push!(D.children[b.belief], ba)
@@ -180,11 +206,11 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             D.parent[bp] = ba
             D.Delta[bp] = b.depth + 1
             D.obs[bp] = o
-            D.obs_prob[bp] = fdict[o] / nparticles
+            D.obs_prob[bp] = fdict[o] / m
             D.l[bp], D.u[bp] = bounds_dict[o]
         end
-        push!(D.ba_l, D.ba_r[ba] + sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba]))
-        push!(D.ba_u, D.ba_r[ba] + sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba]))
+        push!(D.ba_l, D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba]))
+        push!(D.ba_u, D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba]))
     end
 end
 
