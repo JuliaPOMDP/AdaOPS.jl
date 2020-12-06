@@ -54,6 +54,7 @@ export
 
 include("grid.jl")
 include("Sampling.jl")
+include("wpf_belief.jl")
 
 """
     AdaOPSSolver(<keyword arguments>)
@@ -129,33 +130,104 @@ Further information can be found in the field docstrings (e.g.
     tree_in_info::Bool                      = false
 end
 
-struct AdaOPSPlanner{P<:POMDP, B, RNG<:AbstractRNG} <: Policy
+mutable struct AdaOPSTree{S,A,O}
+    weights::Vector{Vector{Float64}} # stores weights for *belief node*
+    children::Vector{Vector{Int}} # to children *ba nodes*
+    parent::Vector{Int} # maps to the parent *ba node*
+    Delta::Vector{Int}
+    u::Vector{Float64}
+    l::Vector{Float64}
+    obs::Vector{O}
+    obs_prob::Vector{Float64}
+
+    ba_particles::Vector{Vector{S}} # stores particles for *ba nodes*
+    ba_children::Vector{Vector{Int}}
+    ba_parent::Vector{Int} # maps to parent *belief node*
+    ba_u::Vector{Float64}
+    ba_l::Vector{Float64}
+    ba_r::Vector{Float64} # needed for backup
+    ba_action::Vector{A}
+
+    root_belief::Union{WPFBelief, Missing}
+end
+
+struct AdaOPSPlanner{P<:POMDP, B, RNG<:AbstractRNG, S, O} <: Policy
     sol::AdaOPSSolver
     pomdp::P
     bounds::B
     init_m::Int
     discounts::Array{Float64,1}
     rng::RNG
+    # The following attributes are used to avoid reallocating memory
+    tree::AdaOPSTree
+    all_states::Array{S, 1}
+    state_ind_dict::Dict{S, Int}
+    wdict::Dict{O, Array{Float64, 1}}
+    obs_ind_dict::Dict{O, Int}
+    freqs::Array{Float64, 1}
+    likelihood_sums::Array{Float64, 1}
+    likelihood_square_sums::Array{Float64, 1}
+    access_cnts::Union{Array, Nothing}
+    ks::Union{Array{Int, 1}, Nothing}
 end
 
 function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
+    S = statetype(pomdp)
+    A = actiontype(pomdp)
+    O = obstype(pomdp)
+
     rng = deepcopy(sol.rng)
     bounds = init_bounds(sol.bounds, pomdp, sol, rng)
     init_m = ceil(Int64, sol.MESS(sol.k_min, sol.zeta))
     discounts = discount(pomdp) .^[0:(sol.D+1);]
-    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, init_m, discounts, rng)
+
+    tree = AdaOPSTree{S,A,O}(Array{Float64,1}[],
+                         Array{Int,1}[],
+                         Int[],
+                         Int[],
+                         Float64[],
+                         Float64[],
+                         O[],
+                         Float64[],
+
+                         Array{S,1}[],
+                         Array{Int,1}[],
+                         Int[],
+                         Float64[],
+                         Float64[],
+                         Float64[],
+                         A[],
+
+                         missing
+                 )
+    all_states = S[] # all states generated (may have duplicates)
+    state_ind_dict = Dict{S, Int}() # the index of all generated distinct states
+    wdict = Dict{O, Array{Float64,1}}() # weights of child beliefs
+    obs_ind_dict = Dict{O, Int}() # the index of observation branches
+    freqs = Float64[] # frequency of observations
+
+    # store the likelihood sum and likelihood square sum for convenience of ESS computation
+    likelihood_sums = Float64[]
+    likelihood_square_sums = Float64[]
+
+    if sol.grid !== nothing
+        access_cnts = Array[] # store the access_count grid for each observation branch
+        ks = Int[] # track the dispersion of child beliefs
+    else
+        access_cnts = nothing
+        ks = nothing
+    end
+    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, init_m, discounts, rng,
+                        tree, all_states, state_ind_dict, wdict, obs_ind_dict, freqs,
+                        likelihood_sums, likelihood_square_sums, access_cnts, ks)
 end
 
-include("wpf_belief.jl")
 include("bounds.jl")
-
 include("tree.jl")
 include("planner.jl")
 include("pomdps_glue.jl")
-
 include("visualization.jl")
 include("exceptions.jl")
-
 include("analysis.jl")
 
 end # module

@@ -19,7 +19,6 @@ end
 StateGrid(cutPoints...) = StateGrid{length(cutPoints)}(cutPoints...)
 
 zeros_like(grid::StateGrid) = zeros(Int64, [length(points)+1 for points in grid.cutPoints]...)
-zeros_like(::Nothing) = nothing
 
 function access(grid::StateGrid, access_cnt::Array, s, pomdp::POMDP)
     s = convert_s(AbstractVector{Float64}, s, pomdp)
@@ -44,4 +43,3 @@ function access(grid::StateGrid, access_cnt::Array, s, pomdp::POMDP)
     access_cnt[ind...] += 1
     return access_cnt[ind...] == 1 ? true : false
 end
-access(grid::Nothing, access_cnt, s, pomdp) = false
