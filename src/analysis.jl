@@ -52,9 +52,6 @@ function explore_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         b = next_best(D, b, p)
     end
 
-    if D.Delta[b] > p.sol.D
-        make_default!(D, b)
-    end
     return b::Int, extra_info
 end
 
