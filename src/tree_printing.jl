@@ -4,8 +4,8 @@ struct TextTree
 end
 
 function TextTree(D::AdaOPSTree)
-    lenb = length(D.children)
-    lenba = length(D.ba_children)
+    lenb = D.b_len
+    lenba = D.ba_len
     len = lenb + lenba
     m = n_particles(D.root_belief)
     children = Vector{Vector{Int}}(len)

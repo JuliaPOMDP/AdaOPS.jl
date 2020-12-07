@@ -19,12 +19,11 @@ ParticleFilters.rand(rng::R, b::WPFBelief) where R<:AbstractRNG = rand(rng, b.pa
 
 ParticleFilters.particles(b::WPFBelief) = b.particles
 ParticleFilters.n_particles(b::WPFBelief) = length(b.particles)
-ParticleFilters.weight(b::WPFBelief{S,O}, i::Int) where S where O = b.weights[i]
+ParticleFilters.weight(b::WPFBelief, i::Int) = b.weights[i]
 ParticleFilters.particle(b::WPFBelief, i::Int) = b.particles[i]
 ParticleFilters.weight_sum(b::WPFBelief) = b.weight_sum
 ParticleFilters.weights(b::WPFBelief) = b.weights
 ParticleFilters.weighted_particles(b::WPFBelief) = (b.particles[i]=>b.weights[i] for i in 1:length(b.weights))
-# Statistics.mean(b::WPFBelief) = dot(b.weights, b.particles)/weight_sum(b)
 POMDPs.mean(b::WPFBelief) = dot(b.weights, b.particles)/weight_sum(b)
 POMDPs.currentobs(b::WPFBelief) = b._obs
 @deprecate previous_obs POMDPs.currentobs
@@ -51,16 +50,16 @@ initialize_belief(::PreviousObservationUpdater, b::WPFBelief) = b._obs
 
 function resample(b::WPFBelief{S}, m::Int, rng::AbstractRNG) where {S}
     particle_set = Array{S}(undef, m)
-    r = rand(rng)*weight_sum(b)/m
-    c = weight(b,1)
+    step = weight_sum(b)/m
+    U = rand(rng)*step
+    c = weight(b,1) # accumulate sum of weights
     i = 1
-    U = r
     for particle in 1:m
         while U > c
             i += 1
             c += weight(b, i)
         end
-        U += weight_sum(b)/m
+        U += step
         particle_set[particle] = particles(b)[i]
     end
     return WPFBelief(particle_set, fill(1.0, m), m, b.belief, b.depth, b.tree, b._obs)
@@ -71,16 +70,16 @@ function resample!(b_resample::WPFBelief, b::WPFBelief, m::Int, rng::AbstractRNG
     end_ind = n_particles(b_resample) + m
     resize!(b_resample.particles, end_ind)
     resize!(b_resample.weights, end_ind)
-    r = rand(rng)*weight_sum(b)/m
-    c = weight(b,1)
+    step = weight_sum(b)/m
+    U = rand(rng)*step
+    c = weight(b,1) # accumulate sum of weights
     i = 1
-    U = r
     for particle in start_ind:end_ind
         while U > c
             i += 1
             c += weight(b, i)
         end
-        U += weight_sum(b)/m
+        U += step
         b_resample.particles[particle] = particles(b)[i]
     end
     b_resample.weights[start_ind:end_ind] .= 1.0

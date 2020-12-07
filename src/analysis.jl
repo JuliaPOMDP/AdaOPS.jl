@@ -11,6 +11,9 @@ function extra_info_analysis(info::Dict)
     branch = info[:branch]
     println("Number of observation branchs: min/mean/max = $(minimum(branch))/$(mean(branch))/$(maximum(branch))")
     println("Confidence interval (0.1, 0.9) = $(quantile(branch, (0.1, 0.9)))")
+    depth = info[:depth]
+    println("Depth of expansion: min/mean/max = $(minimum(depth))/$(mean(depth))/$(maximum(depth))")
+    println("Confidence interval (0.1, 0.9) = $(quantile(depth, (0.1, 0.9)))")
 end
 
 function build_tree_test(p::AdaOPSPlanner, b_0)
@@ -18,7 +21,7 @@ function build_tree_test(p::AdaOPSPlanner, b_0)
     b = 1
     trial = 1
     start = CPUtime_us()
-    extra_info = Dict(:k=>Int[], :m=>Int[], :branch=>Int[])
+    extra_info = Dict(:k=>Int[], :m=>Int[], :branch=>Int[], :depth=>Int[])
 
     while D.u[1]-D.l[1] > p.sol.epsilon_0 &&
           CPUtime_us()-start < p.sol.T_max*1e6 &&
@@ -27,6 +30,7 @@ function build_tree_test(p::AdaOPSPlanner, b_0)
         extra_info[:k] = [extra_info[:k]; new_info[:k]]
         extra_info[:m] = [extra_info[:m]; new_info[:m]]
         extra_info[:branch] = [extra_info[:branch]; new_info[:branch]]
+        push!(extra_info[:depth], D.Delta[b])
         backup!(D, b, p)
         trial += 1
     end
@@ -58,27 +62,34 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     S = statetype(p.pomdp)
     A = actiontype(p.pomdp)
     O = obstype(p.pomdp)
+
     extra_info = Dict(:k=>Int[], :m=>Int[], :branch=>Int[])
 
-    all_states = S[] # all states generated (may have duplicates)
-    state_ind_dict = Dict{S, Int}() # the index of all generated distinct states
-    wdict = Dict{O, Array{Float64,1}}() # weights of child beliefs
-    obs_ind_dict = Dict{O, Int}() # the index of observation branches
-    freqs = Float64[] # frequency of observations
+    all_states = p.all_states # all states generated (may have duplicates)
+    state_ind_dict = p.state_ind_dict # the index of all generated distinct states
+    wdict = p.wdict # weights of child beliefs
+    obs_ind_dict = p.obs_ind_dict # the index of observation branches
+    freqs = p.freqs # frequency of observations
 
     # store the likelihood sum and likelihood square sum for convenience of ESS computation
-    likelihood_sums = Float64[]
-    likelihood_square_sums = Float64[]
+    likelihood_sums = p.likelihood_sums
+    likelihood_square_sums = p.likelihood_square_sums
 
     if p.sol.grid !== nothing
-        access_cnts = Array[] # store the access_count grid for each observation branch
-        ks = Int[] # track the dispersion of child beliefs
+        access_cnts = p.access_cnts # store the access_count grid for each observation branch
+        ks = p.ks # track the dispersion of child beliefs
     end
 
     b = get_wpfbelief(D, b)
     b_resample = resample(b, p.init_m, p.rng)
-    for a in actions(p.pomdp, b)
-        empty!(all_states)
+
+
+    acts = actions(p.pomdp, b)
+    resize_ba!(D, D.ba_len + length(acts))
+    ba = D.ba_len
+    D.ba_len += length(acts)
+
+    for a in acts
         empty!(state_ind_dict)
         empty!(wdict)
         empty!(freqs)
@@ -90,10 +101,18 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             empty!(ks)
         end
 
+        ba += 1
         Rsum = 0.0
-        next_states = S[]
+        next_states = D.ba_particles[ba]
+        empty!(next_states)
         m = p.init_m
         curr_particle_num = 0
+        bp = D.b_len + 1
+        if length(D.weights) >= bp 
+            w = D.weights[bp] 
+        else
+            w = Float64[]
+        end
 
         while m > curr_particle_num
             resize!(all_states, m)
@@ -123,7 +142,8 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         end
                     end
                     if !haskey(obs_ind_dict, o)
-                        w_temp = zeros(length(next_states))
+                        resize!(w, length(next_states))
+                        fill!(w, 0.0)
                         likelihood_sum = 0.0
                         likelihood_square_sum = 0.0
                         for j in 1:(curr_particle_num+i)
@@ -131,13 +151,12 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                             likelihood_sum += likelihood
                             likelihood_square_sum += likelihood * likelihood
                             state_ind = state_ind_dict[all_states[j]]
-                            w_temp[state_ind] += likelihood
+                            w[state_ind] += likelihood
                         end
                         for (o1, w1) in wdict
-                            if norm(w1-w_temp, 1) <= p.sol.delta
+                            if norm(w1-w, 1) <= p.sol.delta
                                 obs_ind_dict[o] = obs_ind_dict[o1]
                                 o = o1
-                                w = w1
                                 break
                             end
                         end
@@ -145,11 +164,17 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                             push!(freqs, 0)
                             push!(likelihood_sums, likelihood_sum)
                             push!(likelihood_square_sums, likelihood_square_sum)
-                            wdict[o] = w_temp
+                            wdict[o] = w
                             obs_ind_dict[o] = length(freqs)
                             if p.sol.grid !== nothing
                                 push!(access_cnts, zeros_like(p.sol.grid))
                                 push!(ks, 0)
+                            end
+                            bp += 1
+                            if length(D.weights) >= bp 
+                                w = D.weights[bp] 
+                            else
+                                w = Float64[]
                             end
                         end
                     end
@@ -180,33 +205,29 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         push!(extra_info[:m], curr_particle_num)
         push!(extra_info[:branch], length(wdict))
 
-        nbps = length(wdict)
-        nparticles = length(next_states)
-        last_b = length(D.weights)
-        push!(D.ba_particles, next_states)
-        push!(D.ba_children, [last_b+1:last_b+nbps;])
-        push!(D.ba_parent, b.belief)
-        push!(D.ba_r, Rsum / curr_particle_num)
-        push!(D.ba_action, a)
-        ba = length(D.ba_particles)
+        bp = D.b_len + 1
+        D.b_len += length(wdict)
+        D.ba_children[ba] = [bp:D.b_len;]
+        D.ba_parent[ba] = b.belief
+        D.ba_r[ba] = Rsum / curr_particle_num
+        D.ba_action[ba] = a
         push!(D.children[b.belief], ba)
 
-        resize!(D, last_b+nbps)
-        bp = last_b
-        wpf_belief = WPFBelief(next_states, fill(1/nparticles, nparticles), 1.0, bp, b.depth + 1, D, first(keys(wdict)))
+        resize_b!(D, D.b_len)
+        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, bp, b.depth + 1, D, first(keys(wdict)))
         bounds_dict = bounds(p.bounds, p.pomdp, wpf_belief, wdict, p.sol.bounds_warnings)
         for (o, w) in wdict
-            bp += 1
             D.weights[bp] = w
-            D.children[bp] = Int[]
+            empty!(D.children[bp])
             D.parent[bp] = ba
             D.Delta[bp] = b.depth + 1
             D.obs[bp] = o
             D.obs_prob[bp] = freqs[obs_ind_dict[o]] / curr_particle_num
             D.l[bp], D.u[bp] = bounds_dict[o]
+            bp += 1
         end
-        push!(D.ba_l, D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba]))
-        push!(D.ba_u, D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba]))
+        D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
+        D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
     return extra_info
 end

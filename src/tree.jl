@@ -9,15 +9,25 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
     end
     m = p.init_m
     curr_particle_num = 0
-    weight_dict = Dict{S, Float64}()
+    
+    tree = p.tree
+    tree.b_len = 1
+    tree.ba_len = 0
+
+    state_ind_dict = Dict{S, Int}()
+    particles = S[]
+    weights = tree.weights[1]
+    empty!(weights)
 
     while curr_particle_num < m
         for i in (curr_particle_num+1):m
             s = rand(p.rng, b_0)
-            if haskey(weight_dict, s)
-                weight_dict[s] += 1.0
+            if haskey(state_ind_dict, s)
+                weights[state_ind_dict[s]] += 1.0
             else
-                weight_dict[s] = 1.0
+                push!(particles, s)
+                push!(weights, 1.0)
+                state_ind_dict[s] = length(weights)
                 if p.sol.grid !== nothing && access(p.sol.grid, access_cnt, s, p.pomdp)
                     k += 1
                 end
@@ -28,19 +38,12 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
         m = ceil(Int64, MESS)
     end
 
-    root_belief = WPFBelief(collect(keys(weight_dict)), collect(values(weight_dict)), m, 1, 0)
+    root_belief = WPFBelief(particles, weights, curr_particle_num, 1, 0)
     l, u = bounds(p.bounds, p.pomdp, root_belief, p.sol.bounds_warnings)
 
-    tree = p.tree
-    empty!(tree)
-    push!(tree.weights, root_belief.weights)
-    push!(tree.children, Int[])
-    push!(tree.parent, 0)
-    push!(tree.Delta, 0)
-    push!(tree.u, u)
-    push!(tree.l, l)
-    resize!(tree.obs, 1)
-    push!(tree.obs_prob, 1.0)
+    empty!(tree.children[1])
+    tree.u[1] = u
+    tree.l[1] = l
     tree.root_belief = root_belief
 
     return tree::AdaOPSTree{S,A,O}
@@ -68,8 +71,13 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
 
     b = get_wpfbelief(D, b)
     b_resample = resample(b, p.init_m, p.rng)
-    for a in actions(p.pomdp, b)
-        empty!(all_states)
+
+    acts = actions(p.pomdp, b)
+    resize_ba!(D, D.ba_len + length(acts))
+    ba = D.ba_len
+    D.ba_len += length(acts)
+
+    for a in acts
         empty!(state_ind_dict)
         empty!(wdict)
         empty!(freqs)
@@ -81,10 +89,18 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             empty!(ks)
         end
 
+        ba += 1
         Rsum = 0.0
-        next_states = S[]
+        next_states = D.ba_particles[ba]
+        empty!(next_states)
         m = p.init_m
         curr_particle_num = 0
+        bp = D.b_len + 1
+        if length(D.weights) >= bp 
+            w = D.weights[bp] 
+        else
+            w = Float64[]
+        end
 
         while m > curr_particle_num
             resize!(all_states, m)
@@ -114,7 +130,8 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         end
                     end
                     if !haskey(obs_ind_dict, o)
-                        w_temp = zeros(length(next_states))
+                        resize!(w, length(next_states))
+                        fill!(w, 0.0)
                         likelihood_sum = 0.0
                         likelihood_square_sum = 0.0
                         for j in 1:(curr_particle_num+i)
@@ -122,13 +139,12 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                             likelihood_sum += likelihood
                             likelihood_square_sum += likelihood * likelihood
                             state_ind = state_ind_dict[all_states[j]]
-                            w_temp[state_ind] += likelihood
+                            w[state_ind] += likelihood
                         end
                         for (o1, w1) in wdict
-                            if norm(w1-w_temp, 1) <= p.sol.delta
+                            if norm(w1-w, 1) <= p.sol.delta
                                 obs_ind_dict[o] = obs_ind_dict[o1]
                                 o = o1
-                                w = w1
                                 break
                             end
                         end
@@ -136,11 +152,17 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                             push!(freqs, 0)
                             push!(likelihood_sums, likelihood_sum)
                             push!(likelihood_square_sums, likelihood_square_sum)
-                            wdict[o] = w_temp
+                            wdict[o] = w
                             obs_ind_dict[o] = length(freqs)
                             if p.sol.grid !== nothing
                                 push!(access_cnts, zeros_like(p.sol.grid))
                                 push!(ks, 0)
+                            end
+                            bp += 1
+                            if length(D.weights) >= bp 
+                                w = D.weights[bp] 
+                            else
+                                w = Float64[]
                             end
                         end
                     end
@@ -164,66 +186,59 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             end
         end
 
-        nbps = length(wdict)
-        nparticles = length(next_states)
-        last_b = length(D.weights)
-        push!(D.ba_particles, next_states)
-        push!(D.ba_children, [last_b+1:last_b+nbps;])
-        push!(D.ba_parent, b.belief)
-        push!(D.ba_r, Rsum / curr_particle_num)
-        push!(D.ba_action, a)
-        ba = length(D.ba_particles)
+        bp = D.b_len + 1
+        D.b_len += length(wdict)
+        D.ba_children[ba] = [bp:D.b_len;]
+        D.ba_parent[ba] = b.belief
+        D.ba_r[ba] = Rsum / curr_particle_num
+        D.ba_action[ba] = a
         push!(D.children[b.belief], ba)
 
-        resize!(D, last_b+nbps)
-        bp = last_b
-        wpf_belief = WPFBelief(next_states, fill(1/nparticles, nparticles), 1.0, bp, b.depth + 1, D, first(keys(wdict)))
+        resize_b!(D, D.b_len)
+        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, bp, b.depth + 1, D, first(keys(wdict)))
         bounds_dict = bounds(p.bounds, p.pomdp, wpf_belief, wdict, p.sol.bounds_warnings)
         for (o, w) in wdict
-            bp += 1
             D.weights[bp] = w
-            D.children[bp] = Int[]
+            empty!(D.children[bp])
             D.parent[bp] = ba
             D.Delta[bp] = b.depth + 1
             D.obs[bp] = o
             D.obs_prob[bp] = freqs[obs_ind_dict[o]] / curr_particle_num
             D.l[bp], D.u[bp] = bounds_dict[o]
+            bp += 1
         end
-        push!(D.ba_l, D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba]))
-        push!(D.ba_u, D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba]))
+        D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
+        D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
 end
 
-function Base.resize!(D::AdaOPSTree, n::Int)
-    resize!(D.weights, n)
-    resize!(D.children, n)
-    resize!(D.parent, n)
-    resize!(D.Delta, n)
-    resize!(D.u, n)
-    resize!(D.l, n)
-    resize!(D.obs, n)
-    resize!(D.obs_prob, n)
+function resize_b!(D::AdaOPSTree, n::Int)
+    if n > length(D.weights)
+        for i in length(D.weights):n
+            push!(D.children, Int[])
+        end
+        resize!(D.weights, n)
+        resize!(D.parent, n)
+        resize!(D.Delta, n)
+        resize!(D.u, n)
+        resize!(D.l, n)
+        resize!(D.obs, n)
+        resize!(D.obs_prob, n)
+    end
 end
 
-function Base.empty!(D::AdaOPSTree)
-    empty!(D.weights)
-    empty!(D.children)
-    empty!(D.parent)
-    empty!(D.Delta)
-    empty!(D.u)
-    empty!(D.l)
-    empty!(D.obs)
-    empty!(D.obs_prob)
-
-    empty!(D.ba_particles)
-    empty!(D.ba_children)
-    empty!(D.ba_parent)
-    empty!(D.ba_u)
-    empty!(D.ba_l)
-    empty!(D.ba_r)
-    empty!(D.ba_action)
-
-    D.root_belief = missing
+function resize_ba!(D::AdaOPSTree{S}, n::Int) where S
+    if n > length(D.ba_children)
+        for i in length(D.ba_children):n
+            push!(D.ba_particles, S[])
+        end
+        resize!(D.ba_children, n)
+        resize!(D.ba_parent, n)
+        resize!(D.ba_u, n)
+        resize!(D.ba_l, n)
+        resize!(D.ba_r, n)
+        resize!(D.ba_action, n)
+    end
 end
 
 function get_wpfbelief(D::AdaOPSTree, b::Int)

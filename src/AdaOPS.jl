@@ -149,6 +149,8 @@ mutable struct AdaOPSTree{S,A,O}
     ba_action::Vector{A}
 
     root_belief::Union{WPFBelief, Missing}
+    b_len::Int
+    ba_len::Int
 end
 
 struct AdaOPSPlanner{P<:POMDP, B, RNG<:AbstractRNG, S, O} <: Policy
@@ -181,14 +183,14 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
     init_m = ceil(Int64, sol.MESS(sol.k_min, sol.zeta))
     discounts = discount(pomdp) .^[0:(sol.D+1);]
 
-    tree = AdaOPSTree{S,A,O}(Array{Float64,1}[],
-                         Array{Int,1}[],
-                         Int[],
-                         Int[],
-                         Float64[],
-                         Float64[],
-                         O[],
-                         Float64[],
+    tree = AdaOPSTree{S,A,O}([Float64[]],
+                         [Int[]],
+                         [0],
+                         [0],
+                         Vector{Float64}(undef, 1),
+                         Vector{Float64}(undef, 1),
+                         Vector{O}(undef, 1),
+                         [1.0],
 
                          Array{S,1}[],
                          Array{Int,1}[],
@@ -198,7 +200,9 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
                          Float64[],
                          A[],
 
-                         missing
+                         missing,
+                         1,
+                         0
                  )
     all_states = S[] # all states generated (may have duplicates)
     state_ind_dict = Dict{S, Int}() # the index of all generated distinct states

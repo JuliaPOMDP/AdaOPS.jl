@@ -40,7 +40,6 @@ function backup!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         ba = D.parent[b]
         b = D.ba_parent[ba]
 
-        nbps = length(D.ba_children[ba])
         D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
         D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
 
