@@ -1,7 +1,7 @@
 name = "AdaOPS"
 uuid = "eadfb9d8-44f1-454c-a5eb-0663ee7d74a1"
 repo = "git@github.com:AutomobilePOMDP/AdaOPS.jl.git"
-version = "0.2.2"
+version = "0.2.3"
 
 [deps]
 BasicPOMCP = "d721219e-3fc6-5570-a8ef-e5402f47c49e"
