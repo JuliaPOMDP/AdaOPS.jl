@@ -10,14 +10,16 @@ function D3Trees.D3Tree(D::AdaOPSTree; title="AdaOPS Tree", kwargs...)
     for b in 1:lenb
         children[b] = D.children[b] .+ lenb
         text[b] = @sprintf("""
-                           o:%s
+                           o:%s prob:%6.2f
                            l:%6.2f, u:%6.2f""",
                            b==1 ? "<root>" : string(D.obs[b]),
+                           D.obs_prob[b],
                            D.l[b],
                            D.u[b],
                           )
         tt[b] = """
                 o: $(b==1 ? "<root>" : string(D.obs[b]))
+                prob: $(D.obs_prob[b])
                 l: $(D.l[b])
                 u: $(D.u[b])
                 $(length(D.children[b])) children
@@ -31,14 +33,15 @@ function D3Trees.D3Tree(D::AdaOPSTree; title="AdaOPS Tree", kwargs...)
         for ba in D.children[b]
             children[ba+lenb] = D.ba_children[ba]
             text[ba+lenb] = @sprintf("""
-                                     a:%s r:%6.2f
+                                     a:%s r:%6.2f |ϕ|:%2d
                                      l:%6.2f, u:%6.2f""",
-                                     D.ba_action[ba], D.ba_r[ba],
+                                     D.ba_action[ba], D.ba_r[ba], length(D.ba_particles[ba]),
                                      D.ba_l[ba], D.ba_u[ba],
                                      )
             tt[ba+lenb] = """
                           a: $(D.ba_action[ba])
                           r: $(D.ba_r[ba])
+                          |ϕ|:$(length(D.ba_particles[ba]))
                           l: $(D.ba_l[ba])
                           u: $(D.ba_u[ba])
                           $(length(D.ba_children[ba])) children

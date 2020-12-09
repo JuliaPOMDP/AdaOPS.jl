@@ -117,3 +117,23 @@ function ParticleFilters.probdict(b::WPFBelief{S, O}) where S where O
     end
     return b._probs
 end
+
+# Extract Specific type of belief from WPFBelief
+extract_belief(::NothingUpdater, b::WPFBelief) = nothing
+
+function extract_belief(::PreviousObservationUpdater, b::WPFBelief)
+    b._obs
+end
+
+function extract_belief(up::KMarkovUpdater, b::WPFBelief)
+    hist = history(b)
+    if length(hist) > up.k
+        [tuple[:o] for tuple in hist[end-up.k+1:end]]
+    else
+        [tuple[:o] for tuple in hist]
+    end
+end
+
+function extract_belief(up::BasicParticleFilter, b::WPFBelief)
+    ParticleFilters.resample(up.resampler, b, up.rng)
+end

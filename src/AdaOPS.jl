@@ -96,8 +96,17 @@ Further information can be found in the field docstrings (e.g.
     "State grid for adaptive particle filters"
     grid::Union{Nothing, StateGrid}         = nothing
 
-    "The minimum number of different tiles in the grid occupied by a belief."
-    k_min::Int                              = 5
+    "The initial number of particles at root. (no need to adjust)"
+    m_init::Int                             = 50
+
+    "Whether to use effective sampling size"
+    ESS::Bool                               = true
+
+    "At least m_min times of MESS(k_parent, zeta) particles are needed for estimating a belief."
+    m_min::Float64                          = 0.6
+
+    "At most m_max times of m_init particles are allowed for estimating a belief."
+    m_max::Float64                          = 10.0
 
     "Return the minimum effective sample size needed for accurate estimation"
     MESS::Function                          = KLDSampleSize
@@ -135,6 +144,7 @@ mutable struct AdaOPSTree{S,A,O}
     children::Vector{Vector{Int}} # to children *ba nodes*
     parent::Vector{Int} # maps to the parent *ba node*
     Delta::Vector{Int}
+    k::Vector{Int}
     u::Vector{Float64}
     l::Vector{Float64}
     obs::Vector{O}
@@ -157,7 +167,6 @@ struct AdaOPSPlanner{P<:POMDP, B, RNG<:AbstractRNG, S, O} <: Policy
     sol::AdaOPSSolver
     pomdp::P
     bounds::B
-    init_m::Int
     discounts::Array{Float64,1}
     rng::RNG
     # The following attributes are used to avoid reallocating memory
@@ -180,11 +189,11 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
 
     rng = deepcopy(sol.rng)
     bounds = init_bounds(sol.bounds, pomdp, sol, rng)
-    init_m = ceil(Int64, sol.MESS(sol.k_min, sol.zeta))
     discounts = discount(pomdp) .^[0:(sol.D+1);]
 
     tree = AdaOPSTree{S,A,O}([Float64[]],
                          [Int[]],
+                         [0],
                          [0],
                          [0],
                          Vector{Float64}(undef, 1),
@@ -204,26 +213,17 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
                          1,
                          0
                  )
-    all_states = S[] # all states generated (may have duplicates)
-    state_ind_dict = Dict{S, Int}() # the index of all generated distinct states
-    wdict = Dict{O, Array{Float64,1}}() # weights of child beliefs
-    obs_ind_dict = Dict{O, Int}() # the index of observation branches
-    freqs = Float64[] # frequency of observations
-
-    # store the likelihood sum and likelihood square sum for convenience of ESS computation
-    likelihood_sums = Float64[]
-    likelihood_square_sums = Float64[]
 
     if sol.grid !== nothing
-        access_cnts = Array[] # store the access_count grid for each observation branch
+        access_cnts = Array{Int, length(sol.grid)}[] # store the access_count grid for each observation branch
         ks = Int[] # track the dispersion of child beliefs
     else
         access_cnts = nothing
         ks = nothing
     end
-    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, init_m, discounts, rng,
-                        tree, all_states, state_ind_dict, wdict, obs_ind_dict, freqs,
-                        likelihood_sums, likelihood_square_sums, access_cnts, ks)
+    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng,
+                        tree, S[], Dict{S, Int}(), Dict{O, Array{Float64,1}}(),
+                        Dict{O, Int}(), Float64[], Float64[], Float64[], access_cnts, ks)
 end
 
 include("bounds.jl")

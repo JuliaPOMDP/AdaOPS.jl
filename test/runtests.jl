@@ -8,7 +8,6 @@ using Random
 using POMDPModelTools
 using ParticleFilters
 using BeliefUpdaters
-
 include("independent_bounds.jl")
 
 pomdp = BabyPOMDP()
@@ -43,15 +42,21 @@ rng = MersenneTwister(2)
     @test history(b)[end].o == o
 end
 
+grid = StateGrid([1.0])
+function POMDPs.convert_s(::Type{V} where V <: AbstractVector{Float64}, s::Bool, pomdp::BabyPOMDP)
+    return Float64[s]
+end
 # Type stability
 pomdp = BabyPOMDP()
 bds = IndependentBounds(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
 solver = AdaOPSSolver(bounds=bds,
                       rng=MersenneTwister(4),
-                      k_min=2,
+                      grid=nothing,
                       zeta=0.04,
-                      delta=0.1,
+                      delta=0.04,
                       xi=0.1,
+                      ESS=false,
+                      m_min=1.0,
                       tree_in_info=true
                      )
 p = solve(solver, pomdp)
@@ -76,7 +81,7 @@ pomdp = BabyPOMDP()
 
 # constant bounds
 bds = (reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
-solver = AdaOPSSolver(bounds=bds, k_min=2, zeta=0.04, delta=0.1, xi=0.1)
+solver = AdaOPSSolver(bounds=bds, zeta=0.04, delta=0.01, xi=0.1, m_min=1.0, grid=nothing, ESS=false)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=100)
 @time hist = simulate(hr, pomdp, planner)
@@ -84,7 +89,7 @@ println("Discounted reward is $(discounted_reward(hist))")
 
 # FO policy lower bound
 bds = IndependentBounds(FORollout(FeedWhenCrying()), 0.0)
-solver = AdaOPSSolver(bounds=bds, k_min=2, zeta=0.04, delta=0.1, xi=0.1)
+solver = AdaOPSSolver(bounds=bds, zeta=0.04, delta=0.01, xi=0.1, m_min=1.0, grid=nothing, ESS=false)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=100)
 @time hist = simulate(hr, pomdp, planner)
@@ -92,7 +97,7 @@ println("Discounted reward is $(discounted_reward(hist))")
 
 # PO policy lower bound
 bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
-solver = AdaOPSSolver(bounds=bds, k_min=2, zeta=0.04, delta=0.1, xi=0.1)
+solver = AdaOPSSolver(bounds=bds, zeta=0.04, delta=0.01, xi=0.1, m_min=1.0, grid=nothing, ESS=false)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=100)
 @time hist = simulate(hr, pomdp, planner)
@@ -103,7 +108,7 @@ using POMDPs, POMDPModels, POMDPSimulators, AdaOPS
 
 pomdp = TigerPOMDP()
 
-solver = AdaOPSSolver(bounds=(-20.0, 0.0), k_min=2, zeta=0.04)
+solver = AdaOPSSolver(bounds=(-20.0, 0.0), zeta=0.04)
 planner = solve(solver, pomdp)
 
 for (s, a, o) in stepthrough(pomdp, planner, "s,a,o", max_steps=10)

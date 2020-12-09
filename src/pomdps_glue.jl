@@ -32,7 +32,7 @@ function POMDPModelTools.action_info(p::AdaOPSPlanner, b)
 end
 
 POMDPs.action(p::AdaOPSPlanner, b) = first(action_info(p, b))::actiontype(p.pomdp)
-POMDPs.updater(p::AdaOPSPlanner) = SIRParticleFilter(p.pomdp, p.init_m * 100, rng=p.rng)
+POMDPs.updater(p::AdaOPSPlanner) = SIRParticleFilter(p.pomdp, ceil(Int, p.sol.m_init*p.sol.m_max*5), rng=p.rng)
 
 function Random.seed!(p::AdaOPSPlanner, seed)
     Random.seed!(p.rng, seed)

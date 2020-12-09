@@ -258,19 +258,3 @@ POMDPLinter.@POMDP_require rollout(est::SolvedFORollout, pomdp::POMDP, start_sta
     sim = RolloutSimulator(est.rng, steps)
     @subreq simulate(sim, pomdp, est.policy, start_state)
 end
-
-# Extract Specific type of belief from WPFBelief
-extract_belief(::NothingUpdater, b::WPFBelief) = nothing
-
-function extract_belief(::PreviousObservationUpdater, b::WPFBelief)
-    b._obs
-end
-
-function extract_belief(up::KMarkovUpdater, b::WPFBelief)
-    hist = history(b)
-    if length(hist) > up.k
-        [tuple[:o] for tuple in hist[end-up.k+1:end]]
-    else
-        [tuple[:o] for tuple in hist]
-    end
-end

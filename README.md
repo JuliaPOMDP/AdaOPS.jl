@@ -36,6 +36,33 @@ For minimal examples of problem implementations, see [this notebook](https://git
 
 Solver options can be found in the `AdaOPSSolver` docstring and accessed using [Julia's built in documentation system](https://docs.julialang.org/en/v1/manual/documentation/#Accessing-Documentation-1) (or directly in the [Solver source code](/src/AdaOPS.jl)). Each option has its own docstring and can be set with a keyword argument in the `AdaOPSSolver` constructor.
 
+### Adaptive Particle Filter
+The core idea of the adaptive particle filter is that it can change the number of particles adaptively and use more particles to estimate the belief when needed.
+#### zeta
+zeta is the targe error when estimating a belief. Spcifically, when we use KLD Sampling to calculate the number of particles needed, zeta is the targe Kullback-Leibler divergence between the estimated belief and the true belief.
+#### MESS
+MESS is a function for computing the number of particles needed for estimating a belief with an error of zeta. By default, the KLD Sampling method is used.
+##### grid
+In order to estimate the belief, we first need know how many slices a belief is consist of. Therefore, we should first implement a function to convert a state to a multidimensional vector,
+`convert_s(::Type{V} where V <: AbstractVector{Float64},::S,::P)`.
+Then, we define a StateGrid to discretize or split the state space.
+A StateGrid is consist of an arrays of cutpoints in each dimension. These cutpoints divide the whole space into small tiles. In each dimension, a number of intervals constitute the grid, and each of these intervals is left-closed and right-open with the endpoints be cutpoints.
+For example, a StateGrid can be defined as `StateGrid([dim1_cutpoints], [dim2_cutpoints], [dim3_cutpoints])`.
+All states lie in one tile will be taken as the same.
+With the number of tiles that a belief occupies, we can estimate the number of particles needed to estimate it.
+#### ESS
+`ESS` is an option to decide whether to calculate the number of particles needed by using effective sample size rather than the actual sample size.
+#### m_max
+`m_max` is the maximum times of `m_init` particles we can afford to estimate a belief. Since `AdaOPS` is an online planning algorithm, we must balance between the accuracy and the speed.
+
+### Packing
+#### delta
+A delta-packing of observation branches will be generated, i.e., the belief nodes with L1 distance less than delta are merged.
+#### m_init
+`m_init` is the least number of particles needed to estimate a belief. Only when a belief is consist of at least `m_init`, we can estimate the L1 distance between observation branches and merge the similar ones.
+#### m_min
+`m_min` is minimum times of `MESS(k_parent, zeta)` particles needed to estimate the belief, where `k_parent` is the number of tiles the parent belief node occupies.
+The intuition is that the more dispersive the parent belief is, the more dispersive the child belief might be. Therefore, by using `m_min`, we can avoid that distinct observation branches are carelessly merged because the particles used is not enough.
 ### Bounds
 
 #### Tuple bounds
