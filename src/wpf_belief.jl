@@ -46,7 +46,6 @@ function POMDPs.history(belief::WPFBelief)
     end
     return belief._hist
 end
-initialize_belief(::PreviousObservationUpdater, b::WPFBelief) = b._obs
 
 function resample(b::WPFBelief{S}, m::Int, rng::AbstractRNG) where {S}
     particle_set = Array{S}(undef, m)
@@ -119,13 +118,10 @@ function ParticleFilters.probdict(b::WPFBelief{S, O}) where S where O
 end
 
 # Extract Specific type of belief from WPFBelief
-extract_belief(::NothingUpdater, b::WPFBelief) = nothing
+initialize_belief(::NothingUpdater, b::WPFBelief) = nothing
+initialize_belief(::PreviousObservationUpdater, b::WPFBelief) = b._obs
 
-function extract_belief(::PreviousObservationUpdater, b::WPFBelief)
-    b._obs
-end
-
-function extract_belief(up::KMarkovUpdater, b::WPFBelief)
+function initialize_belief(up::KMarkovUpdater, b::WPFBelief)
     hist = history(b)
     if length(hist) > up.k
         [tuple[:o] for tuple in hist[end-up.k+1:end]]
@@ -134,6 +130,6 @@ function extract_belief(up::KMarkovUpdater, b::WPFBelief)
     end
 end
 
-function extract_belief(up::BasicParticleFilter, b::WPFBelief)
+function initialize_belief(up::BasicParticleFilter, b::WPFBelief)
     ParticleFilters.resample(up.resampler, b, up.rng)
 end

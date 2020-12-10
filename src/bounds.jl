@@ -237,14 +237,15 @@ end
 
 # Perform a rollout simulation to estimate the value.
 function rollout(est::SolvedPORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int)
-    b = extract_belief(est.updater, b)
     sim = RolloutSimulator(est.rng, steps)
-    return simulate(sim, pomdp, est.policy, est.updater, b, start_state)
+    if typeof(est.updater) <: BasicParticleFilter
+        return pf_simulate(sim, pomdp, est.policy, est.updater, b, start_state)
+    else
+        return simulate(sim, pomdp, est.policy, est.updater, b, start_state)
+    end
 end
 
 POMDPLinter.@POMDP_require rollout(est::SolvedPORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int) begin
-    @req extract_belief(::typeof(est.updater), ::typeof(b))
-    b = extract_belief(est.updater, b)
     sim = RolloutSimulator(est.rng, steps)
     @subreq simulate(sim, pomdp, est.policy, est.updater, b, start_state)
 end
@@ -257,4 +258,42 @@ end
 POMDPLinter.@POMDP_require rollout(est::SolvedFORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int) begin
     sim = RolloutSimulator(est.rng, steps)
     @subreq simulate(sim, pomdp, est.policy, start_state)
+end
+
+# For the partially observable simulation
+function pf_simulate(sim::RolloutSimulator, pomdp::POMDP, policy::Policy, updater::BasicParticleFilter, initial_belief, s)
+    eps = sim.eps === nothing ? 0.0 : sim.eps
+    max_steps = sim.max_steps === nothing ? typemax(Int) : sim.max_steps
+
+    b = initialize_belief(updater, initial_belief)
+
+    disc = 1.0
+    r_total = 0.0
+    step = 1
+    while disc > eps && !isterminal(pomdp, s) && step <= max_steps
+        s, o, r, b = update(updater, s, b, action(policy, b))
+        r_total += disc*r
+        disc *= discount(pomdp)
+        step += 1
+    end
+    return r_total
+end
+
+function update(up::BasicParticleFilter, s, b::ParticleCollection, a)
+    pm = up._particle_memory
+    wm = up._weight_memory
+    resize!(pm, n_particles(b))
+    resize!(wm, n_particles(b)+1)
+    sp, o, r = @gen(:sp, :o, :r)(up.predict_model, s, a, up.rng)
+    predict!(pm, up.predict_model, b, a, o, up.rng)
+    push!(b.particles, s)
+    push!(pm, sp)
+    reweight!(wm, up.reweight_model, b, a, pm, o, up.rng)
+    bp = ParticleFilters.resample(up.resampler,
+                                    WeightedParticleBelief(pm, wm, sum(wm), nothing),
+                                    up.predict_model,
+                                    up.reweight_model,
+                                    b, a, o,
+                                    up.rng)
+    return sp, o, r, bp
 end
