@@ -42,10 +42,8 @@ rng = MersenneTwister(2)
     @test history(b)[end].o == o
 end
 
-grid = StateGrid([1.0])
-function POMDPs.convert_s(::Type{V} where V <: AbstractVector{Float64}, s::Bool, pomdp::BabyPOMDP)
-    return Float64[s]
-end
+convert(s::Bool, pomdp::BabyPOMDP) = Float64[s]
+grid = StateGrid(convert, [1.0])
 # Type stability
 pomdp = BabyPOMDP()
 bds = IndependentBounds(PORollout(FeedWhenCrying(), SIRParticleFilter(pomdp, 30)), 0.0)

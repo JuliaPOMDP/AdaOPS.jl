@@ -44,10 +44,10 @@ zeta is the targe error when estimating a belief. Spcifically, when we use KLD S
 MESS is a function for computing the number of particles needed for estimating a belief with an error of zeta. By default, the KLD Sampling method is used.
 ##### grid
 In order to estimate the belief, we first need know how many slices a belief is consist of. Therefore, we should first implement a function to convert a state to a multidimensional vector,
-`convert_s(::Type{V} where V <: AbstractVector{Float64},::S,::P)`.
+`convert(::S,::P)`.
 Then, we define a StateGrid to discretize or split the state space.
 A StateGrid is consist of an arrays of cutpoints in each dimension. These cutpoints divide the whole space into small tiles. In each dimension, a number of intervals constitute the grid, and each of these intervals is left-closed and right-open with the endpoints be cutpoints.
-For example, a StateGrid can be defined as `StateGrid([dim1_cutpoints], [dim2_cutpoints], [dim3_cutpoints])`.
+For example, a StateGrid can be defined as `StateGrid(convert, [dim1_cutpoints], [dim2_cutpoints], [dim3_cutpoints])`.
 All states lie in one tile will be taken as the same.
 With the number of tiles that a belief occupies, we can estimate the number of particles needed to estimate it.
 #### ESS

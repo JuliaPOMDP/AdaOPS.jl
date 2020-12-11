@@ -1,8 +1,9 @@
 import Base.length
 mutable struct StateGrid{D}
+    convert::Function
     cutPoints::Vector{Vector{Float64}}
 
-    function StateGrid{D}(cutPoints...) where D
+    function StateGrid{D}(convert, cutPoints...) where D
         newCutPoints = Array{Vector{Float64}}(undef, length(cutPoints))
         for i = 1:D
             if length(Set(cutPoints[i])) != length(cutPoints[i])
@@ -13,16 +14,16 @@ mutable struct StateGrid{D}
             end
             newCutPoints[i] = cutPoints[i]
         end
-        return new(newCutPoints)
+        return new(convert, newCutPoints)
     end
 end
-StateGrid(cutPoints...) = StateGrid{Base.length(cutPoints)}(cutPoints...)
+StateGrid(convert, cutPoints...) = StateGrid{Base.length(cutPoints)}(convert, cutPoints...)
 length(grid::StateGrid) = Base.length(grid.cutPoints)
 
 zeros_like(grid::StateGrid) = zeros(Int, [length(points)+1 for points in grid.cutPoints]...)
 
 function access(grid::StateGrid, access_cnt::Array, s, pomdp::POMDP)
-    s = convert_s(AbstractVector{Float64}, s, pomdp)
+    s = grid.convert(s, pomdp)
     ind = zeros(Int64, length(grid.cutPoints))
     for d in 1:length(grid.cutPoints)
         cutPoints = grid.cutPoints[d]
