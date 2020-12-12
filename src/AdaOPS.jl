@@ -42,8 +42,9 @@ export
 
     FOValue,
     POValue,
-    PORollout,
     FORollout,
+    PORollout,
+    SemiPORollout,
     RolloutEstimator,
 
     StateGrid,

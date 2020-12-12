@@ -46,14 +46,14 @@ convert(s::Bool, pomdp::BabyPOMDP) = Float64[s]
 grid = StateGrid(convert, [1.0])
 # Type stability
 pomdp = BabyPOMDP()
-bds = IndependentBounds(PORollout(FeedWhenCrying(), SIRParticleFilter(pomdp, 30)), 0.0)
+bds = IndependentBounds(SemiPORollout(FeedWhenCrying()), 0.0)
 solver = AdaOPSSolver(bounds=bds,
                       rng=MersenneTwister(4),
-                      grid=nothing,
+                      grid=grid,
                       zeta=0.04,
                       delta=0.04,
                       xi=0.1,
-                      ESS=false,
+                      ESS=true,
                       m_min=1.0,
                       tree_in_info=true
                      )

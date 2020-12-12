@@ -170,6 +170,15 @@ struct SolvedPOValue{P<:POMDPs.Policy}
     policy::P
 end
 
+struct SemiPORollout
+    solver::Union{POMDPs.Solver, POMDPs.Policy}
+end
+
+struct SolvedSemiPORollout{P<:POMDPs.Policy, RNG<:AbstractRNG}
+    policy::P
+    rng::RNG
+end
+
 function bound(bd::Union{SolvedFORollout, SolvedPORollout}, pomdp::POMDP, b::WPFBelief, max_depth::Int)
     values = [estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
     return dot(b.weights, values)/b.weight_sum
@@ -190,6 +199,17 @@ function bound(bd::SolvedPORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dic
         switch_to_sibling!(b, o, w)
         values = [estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
         bound_dict[o] = dot(w, values)/sum(w)
+    end
+    return bound_dict
+end
+
+bound(bd::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, max_depth::Int) = estimate_value(bd, pomdp, b, max_depth-b.depth)
+
+function bound(bd::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
+    bound_dict = Dict{O, Float64}()
+    for (o, w) in wdict
+        switch_to_sibling!(b, o, w)
+        bound_dict[o] = estimate_value(bd, pomdp, b, max_depth-b.depth)
     end
     return bound_dict
 end
@@ -226,6 +246,11 @@ function convert_estimator(est::POValue, solver::AdaOPSSolver, pomdp::POMDP)
     SolvedPOValue(policy)
 end
 
+function convert_estimator(est::SemiPORollout, solver::AdaOPSSolver, pomdp)
+    policy = MCTS.convert_to_policy(est.solver, pomdp)
+    SolvedSemiPORollout(policy, solver.rng)
+end
+
 # Estimate the value of state with estimator
 function estimate_value(estimator::Union{SolvedPORollout,SolvedFORollout}, pomdp::POMDP, start_state, b::WPFBelief, steps::Int)
     rollout(estimator, pomdp, start_state, b, steps)
@@ -258,6 +283,51 @@ end
 POMDPLinter.@POMDP_require rollout(est::SolvedFORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int) begin
     sim = RolloutSimulator(est.rng, steps)
     @subreq simulate(sim, pomdp, est.policy, start_state)
+end
+
+function estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, steps::Integer)
+    S = statetype(pomdp)
+    O = obstype(pomdp)
+    odict = Dict{O, Vector{S}}()
+    wdict = Dict{O, Vector{Float64}}()
+
+    if steps <= 0
+        return 0
+    end
+
+    a = action(est.policy, b)
+
+    r_sum = 0.0
+    for (k, s) in enumerate(particles(b))
+        if !isterminal(pomdp, s)
+            sp, o, r = @gen(:sp, :o, :r)(pomdp, s, a, est.rng)
+
+            if haskey(odict, o)
+                push!(odict[o], sp)
+                push!(wdict[o], weight(b, k) * obs_weight(pomdp, s, a, sp, o))
+            else
+                odict[o] = [sp]
+                wdict[o] = [weight(b, k) * obs_weight(pomdp, s, a, sp, o)]
+            end
+
+            r_sum += r * weight(b, k)
+        end
+    end
+
+    U = 0.0
+    w_sum = 0.0
+    for (o, states) in odict
+        if length(states) == 1
+            U += wdict[o][1] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, POtoFO(est.policy), states[1])
+            w_sum += wdict[o][1]
+        else
+            bp = WPFBelief(states, wdict[o], o, depth=b.depth+1)
+            U += weight_sum(bp) * estimate_value(est, pomdp, bp, steps-1)
+            w_sum += weight_sum(bp)
+        end
+    end
+
+    return r_sum/weight_sum(b) + discount(pomdp)*U/w_sum
 end
 
 # For the partially observable simulation
@@ -297,3 +367,9 @@ function update(up::BasicParticleFilter, s, b::ParticleCollection, a)
                                     up.rng)
     return sp, o, r, bp
 end
+
+struct POtoFO{P<:POMDPs.Policy} <: POMDPs.Policy
+    policy::P
+end
+
+POMDPs.action(p::POtoFO, s) = action(p.policy, ParticleCollection([s]))
