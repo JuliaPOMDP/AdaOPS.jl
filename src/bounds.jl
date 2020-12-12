@@ -318,11 +318,15 @@ function estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, st
     w_sum = 0.0
     for (o, states) in odict
         if length(states) == 1
+<<<<<<< HEAD
             if hasmethod(action, (typeof(est.policy), S))
                 U += wdict[o][1] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, est.policy, states[1])
             else
                 U += wdict[o][1] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, POtoFO(est.policy), states[1])
             end
+=======
+            U += wdict[o][1] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, POtoFO(est.policy), states[1])
+>>>>>>> bd1df9be32aed393f1e0609c03c636ab87c3b8e8
             w_sum += wdict[o][1]
         else
             bp = WPFBelief(states, wdict[o], o, depth=b.depth+1)
