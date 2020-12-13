@@ -112,6 +112,9 @@ Further information can be found in the field docstrings (e.g.
     "Return the minimum effective sample size needed for accurate estimation"
     MESS::Function                          = KLDSampleSize
 
+    "Enable state dict (useful only when the state space is small)"
+    enable_state_dict::Bool                 = true
+
     "The maximum depth of the DESPOT."
     D::Int                                  = 90
 

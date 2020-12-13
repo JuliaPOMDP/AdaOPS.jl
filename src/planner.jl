@@ -19,7 +19,11 @@ function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     while D.Delta[b] <= p.sol.D &&
         excess_uncertainty(D, b, p) > 0.0
         if isempty(D.children[b]) # a leaf
-            expand!(D, b, p)
+            if p.sol.enable_state_dict
+                expand_enable_state_ind_dict!(D, b, p)
+            else
+                expand!(D, b, p)
+            end
         end
         b = next_best(D, b, p)
     end
