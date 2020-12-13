@@ -225,11 +225,13 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         likelihood_sum = 0.0
                         likelihood_square_sum = 0.0
                         for j in 1:(curr_particle_num+i)
-                            likelihood = obs_weight(p.pomdp, b_resample.particles[j], a, all_states[j], o)
-                            likelihood_sum += likelihood
-                            likelihood_square_sum += likelihood * likelihood
-                            state_ind = state_ind_dict[all_states[j]]
-                            w[state_ind] += likelihood
+                            if !isterminal(p.pomdp, b_resample.particles[j])
+                                likelihood = obs_weight(p.pomdp, b_resample.particles[j], a, all_states[j], o)
+                                likelihood_sum += likelihood
+                                likelihood_square_sum += likelihood * likelihood
+                                state_ind = state_ind_dict[all_states[j]]
+                                w[state_ind] += likelihood
+                            end
                         end
                         if p.sol.delta > 0.0
                             normalized_w = w ./ likelihood_sum
