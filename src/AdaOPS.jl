@@ -235,7 +235,6 @@ include("tree.jl")
 include("planner.jl")
 include("pomdps_glue.jl")
 include("visualization.jl")
-include("exceptions.jl")
 include("analysis.jl")
 
 end # module
