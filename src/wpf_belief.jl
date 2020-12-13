@@ -61,14 +61,16 @@ function resample(b::WPFBelief{S}, m::Int, rng::AbstractRNG) where {S}
         U += step
         particle_set[particle] = particles(b)[i]
     end
-    return WPFBelief(particle_set, fill(1.0, m), m, b.belief, b.depth, b.tree, b._obs)
+    return ParticleCollection(particle_set)
 end
 
-function resample!(b_resample::WPFBelief, b::WPFBelief, m::Int, rng::AbstractRNG)
+Base.rand(rng::AbstractRNG, b, m::Int) = [rand(rng, b) for i in 1:m]
+resample(b, m::Int, rng::AbstractRNG) = ParticleCollection(rand(rng, b, m))
+
+function resample!(b_resample::ParticleCollection, b::WPFBelief, m::Int, rng::AbstractRNG)
     start_ind = n_particles(b_resample) + 1
     end_ind = n_particles(b_resample) + m
     resize!(b_resample.particles, end_ind)
-    resize!(b_resample.weights, end_ind)
     step = weight_sum(b)/m
     U = rand(rng)*step
     c = weight(b,1) # accumulate sum of weights
@@ -81,9 +83,11 @@ function resample!(b_resample::WPFBelief, b::WPFBelief, m::Int, rng::AbstractRNG
         U += step
         b_resample.particles[particle] = particles(b)[i]
     end
-    b_resample.weights[start_ind:end_ind] .= 1.0
-    b_resample.weight_sum = end_ind
-    b_resample._probs = nothing
+    return nothing::Nothing
+end
+
+function resample!(b_resample::ParticleCollection, b, m::Int, rng::AbstractRNG)
+    b_resample.particles = [b_resample.particles; rand(rng, b, m)]
     return nothing::Nothing
 end
 

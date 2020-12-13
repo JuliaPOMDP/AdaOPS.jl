@@ -7,7 +7,6 @@ function TextTree(D::AdaOPSTree)
     lenb = D.b_len
     lenba = D.ba_len
     len = lenb + lenba
-    m = n_particles(D.root_belief)
     children = Vector{Vector{Int}}(len)
     text = Vector{String}(len)
     for b in 1:lenb

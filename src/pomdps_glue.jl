@@ -9,10 +9,6 @@ function POMDPModelTools.action_info(p::AdaOPSPlanner, b)
             info[:tree] = D
         end
 
-        if isempty(D.children[1]) && D.u[1] - D.l[1] <= p.sol.epsilon_0
-            throw(NoGap(D.l[1]))
-        end
-
         best_l = -Inf
         best_as = actiontype(p.pomdp)[]
         for ba in D.children[1]

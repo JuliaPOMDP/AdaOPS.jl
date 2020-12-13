@@ -3,51 +3,17 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
     A = actiontype(p.pomdp)
     O = obstype(p.pomdp)
 
-    if p.sol.grid !== nothing
-        access_cnt = zeros_like(p.sol.grid)
-        k = 0
-    end
-    m = p.sol.m_init
-    curr_particle_num = 0
-    
     tree = p.tree
     tree.b_len = 1
     tree.ba_len = 0
 
-    state_ind_dict = Dict{S, Int}()
-    particles = S[]
-    weights = tree.weights[1]
-    empty!(weights)
-
-    while curr_particle_num < m
-        for i in (curr_particle_num+1):m
-            s = rand(p.rng, b_0)
-            if haskey(state_ind_dict, s)
-                weights[state_ind_dict[s]] += 1.0
-            else
-                push!(particles, s)
-                push!(weights, 1.0)
-                state_ind_dict[s] = length(weights)
-                if p.sol.grid !== nothing && access(p.sol.grid, access_cnt, s, p.pomdp)
-                    k += 1
-                end
-            end
-        end
-        curr_particle_num = m
-        MESS = p.sol.grid !== nothing ? p.sol.MESS(k, p.sol.zeta) : p.sol.m_init
-        m = ceil(Int64, min(MESS, p.sol.m_max * p.sol.m_init))
-    end
-
-    root_belief = WPFBelief(particles, weights, curr_particle_num, 1, 0)
-    l, u = bounds(p.bounds, p.pomdp, root_belief, p.sol.bounds_warnings)
-
     empty!(tree.children[1])
     if p.sol.grid !== nothing
-        tree.k[1] = k
+        tree.k[1] = 2
     end
-    tree.u[1] = u
-    tree.l[1] = l
-    tree.root_belief = root_belief
+    tree.u[1] = 1.0
+    tree.l[1] = 0.0
+    tree.root_belief = b_0
 
     return tree::AdaOPSTree{S,A,O}
 end
@@ -74,10 +40,10 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         m_init = p.sol.m_init
     end
 
-    b = get_wpfbelief(D, b)
-    b_resample = resample(b, m_init, p.rng)
+    belief = get_belief(D, b)
+    b_resample = resample(belief, m_init, p.rng)
 
-    acts = actions(p.pomdp, b)
+    acts = actions(p.pomdp, belief)
     resize_ba!(D, D.ba_len + length(acts))
     ba = D.ba_len
     D.ba_len += length(acts)
@@ -178,7 +144,7 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                 break
             end
             if m > n_particles(b_resample)
-                resample!(b_resample, b, m - n_particles(b_resample), p.rng)
+                resample!(b_resample, belief, m - n_particles(b_resample), p.rng)
             end
 
             resize!(all_states, m)
@@ -247,23 +213,23 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         end
 
         D.ba_children[ba] = [D.b_len+1:bp;]
-        D.ba_parent[ba] = b.belief
+        D.ba_parent[ba] = b
         D.ba_r[ba] = Rsum / curr_particle_num
         D.ba_action[ba] = a
-        push!(D.children[b.belief], ba)
+        push!(D.children[b], ba)
 
         nbp = bp - D.b_len
         bp = D.b_len
         D.b_len += nbp
         resize_b!(D, D.b_len)
-        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, D.b_len, b.depth + 1, D, first(keys(wdict)))
+        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, D.b_len, D.Delta[b] + 1, D, first(keys(wdict)))
         bounds_dict = bounds(p.bounds, p.pomdp, wpf_belief, wdict, p.sol.bounds_warnings)
         for (o, w) in wdict
             bp += 1
             D.weights[bp] = w
             empty!(D.children[bp])
             D.parent[bp] = ba
-            D.Delta[bp] = b.depth + 1
+            D.Delta[bp] = D.Delta[b] + 1
             D.obs[bp] = o
             obs_ind = obs_ind_dict[o]
             D.obs_prob[bp] = freqs[obs_ind] / curr_particle_num
@@ -300,10 +266,10 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         m_init = p.sol.m_init
     end
 
-    b = get_wpfbelief(D, b)
-    b_resample = resample(b, m_init, p.rng)
+    belief = get_belief(D, b)
+    b_resample = resample(belief, m_init, p.rng)
 
-    acts = actions(p.pomdp, b)
+    acts = actions(p.pomdp, belief)
     resize_ba!(D, D.ba_len + length(acts))
     ba = D.ba_len
     D.ba_len += length(acts)
@@ -409,7 +375,7 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                 break
             end
             if m > n_particles(b_resample)
-                resample!(b_resample, b, m - n_particles(b_resample), p.rng)
+                resample!(b_resample, belief, m - n_particles(b_resample), p.rng)
             end
 
             resize!(all_states, m)
@@ -491,23 +457,23 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         end
 
         D.ba_children[ba] = [D.b_len+1:bp;]
-        D.ba_parent[ba] = b.belief
+        D.ba_parent[ba] = b
         D.ba_r[ba] = Rsum / curr_particle_num
         D.ba_action[ba] = a
-        push!(D.children[b.belief], ba)
+        push!(D.children[b], ba)
 
         nbp = bp - D.b_len
         bp = D.b_len
         D.b_len += nbp
         resize_b!(D, D.b_len)
-        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, D.b_len, b.depth + 1, D, first(keys(wdict)))
+        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, D.b_len, D.Delta[b] + 1, D, first(keys(wdict)))
         bounds_dict = bounds(p.bounds, p.pomdp, wpf_belief, wdict, p.sol.bounds_warnings)
         for (o, w) in wdict
             bp += 1
             D.weights[bp] = w
             empty!(D.children[bp])
             D.parent[bp] = ba
-            D.Delta[bp] = b.depth + 1
+            D.Delta[bp] = D.Delta[b] + 1
             D.obs[bp] = o
             obs_ind = obs_ind_dict[o]
             D.obs_prob[bp] = freqs[obs_ind] / curr_particle_num
@@ -551,10 +517,10 @@ function resize_ba!(D::AdaOPSTree{S}, n::Int) where S
     end
 end
 
-function get_wpfbelief(D::AdaOPSTree, b::Int)
-    if b == 1
+function get_belief(D::AdaOPSTree, belief::Int)
+    if belief == 1
         return D.root_belief
     else
-        return WPFBelief(D.ba_particles[D.parent[b]], D.weights[b], b, D.Delta[b], D, D.obs[b])
+        return WPFBelief(D.ba_particles[D.parent[belief]], D.weights[belief], belief, D.Delta[belief], D, D.obs[belief])
     end
 end

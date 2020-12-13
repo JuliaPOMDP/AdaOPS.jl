@@ -61,7 +61,6 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     S = statetype(p.pomdp)
     A = actiontype(p.pomdp)
     O = obstype(p.pomdp)
-
     extra_info = Dict(:k=>Int[], :m=>Int[], :branch=>Int[])
 
     all_states = p.all_states # all states generated (may have duplicates)
@@ -81,10 +80,10 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         m_init = p.sol.m_init
     end
 
-    b = get_wpfbelief(D, b)
-    b_resample = resample(b, m_init, p.rng)
+    belief = get_belief(D, b)
+    b_resample = resample(belief, m_init, p.rng)
 
-    acts = actions(p.pomdp, b)
+    acts = actions(p.pomdp, belief)
     resize_ba!(D, D.ba_len + length(acts))
     ba = D.ba_len
     D.ba_len += length(acts)
@@ -185,7 +184,7 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                 break
             end
             if m > n_particles(b_resample)
-                resample!(b_resample, b, m - n_particles(b_resample), p.rng)
+                resample!(b_resample, belief, m - n_particles(b_resample), p.rng)
             end
 
             resize!(all_states, m)
@@ -252,7 +251,6 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                 end
             end
         end
-
         # Update extra_info
         if p.sol.grid !== nothing
             push!(extra_info[:k], maximum(ks))
@@ -261,23 +259,23 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         push!(extra_info[:branch], length(wdict))
 
         D.ba_children[ba] = [D.b_len+1:bp;]
-        D.ba_parent[ba] = b.belief
+        D.ba_parent[ba] = b
         D.ba_r[ba] = Rsum / curr_particle_num
         D.ba_action[ba] = a
-        push!(D.children[b.belief], ba)
+        push!(D.children[b], ba)
 
         nbp = bp - D.b_len
         bp = D.b_len
         D.b_len += nbp
         resize_b!(D, D.b_len)
-        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, D.b_len, b.depth + 1, D, first(keys(wdict)))
+        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, D.b_len, D.Delta[b] + 1, D, first(keys(wdict)))
         bounds_dict = bounds(p.bounds, p.pomdp, wpf_belief, wdict, p.sol.bounds_warnings)
         for (o, w) in wdict
             bp += 1
             D.weights[bp] = w
             empty!(D.children[bp])
             D.parent[bp] = ba
-            D.Delta[bp] = b.depth + 1
+            D.Delta[bp] = D.Delta[b] + 1
             D.obs[bp] = o
             obs_ind = obs_ind_dict[o]
             D.obs_prob[bp] = freqs[obs_ind] / curr_particle_num
@@ -296,7 +294,6 @@ function expand_enable_state_ind_dict_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlan
     S = statetype(p.pomdp)
     A = actiontype(p.pomdp)
     O = obstype(p.pomdp)
-
     extra_info = Dict(:k=>Int[], :m=>Int[], :branch=>Int[])
 
     all_states = p.all_states # all states generated (may have duplicates)
@@ -317,10 +314,10 @@ function expand_enable_state_ind_dict_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlan
         m_init = p.sol.m_init
     end
 
-    b = get_wpfbelief(D, b)
-    b_resample = resample(b, m_init, p.rng)
+    belief = get_belief(D, b)
+    b_resample = resample(belief, m_init, p.rng)
 
-    acts = actions(p.pomdp, b)
+    acts = actions(p.pomdp, belief)
     resize_ba!(D, D.ba_len + length(acts))
     ba = D.ba_len
     D.ba_len += length(acts)
@@ -426,7 +423,7 @@ function expand_enable_state_ind_dict_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlan
                 break
             end
             if m > n_particles(b_resample)
-                resample!(b_resample, b, m - n_particles(b_resample), p.rng)
+                resample!(b_resample, belief, m - n_particles(b_resample), p.rng)
             end
 
             resize!(all_states, m)
@@ -466,8 +463,7 @@ function expand_enable_state_ind_dict_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlan
                                 likelihood = obs_weight(p.pomdp, b_resample.particles[j], a, all_states[j], o)
                                 likelihood_sum += likelihood
                                 likelihood_square_sum += likelihood * likelihood
-                                state_ind = state_ind_dict[all_states[j]]
-                                w[state_ind] += likelihood
+                                w[state_ind_dict[all_states[j]]] += likelihood
                             end
                         end
                         if p.sol.delta > 0.0
@@ -507,7 +503,6 @@ function expand_enable_state_ind_dict_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlan
                 end
             end
         end
-
         # Update extra_info
         if p.sol.grid !== nothing
             push!(extra_info[:k], maximum(ks))
@@ -516,23 +511,23 @@ function expand_enable_state_ind_dict_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlan
         push!(extra_info[:branch], length(wdict))
 
         D.ba_children[ba] = [D.b_len+1:bp;]
-        D.ba_parent[ba] = b.belief
+        D.ba_parent[ba] = b
         D.ba_r[ba] = Rsum / curr_particle_num
         D.ba_action[ba] = a
-        push!(D.children[b.belief], ba)
+        push!(D.children[b], ba)
 
         nbp = bp - D.b_len
         bp = D.b_len
         D.b_len += nbp
         resize_b!(D, D.b_len)
-        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, D.b_len, b.depth + 1, D, first(keys(wdict)))
+        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, D.b_len, D.Delta[b] + 1, D, first(keys(wdict)))
         bounds_dict = bounds(p.bounds, p.pomdp, wpf_belief, wdict, p.sol.bounds_warnings)
         for (o, w) in wdict
             bp += 1
             D.weights[bp] = w
             empty!(D.children[bp])
             D.parent[bp] = ba
-            D.Delta[bp] = b.depth + 1
+            D.Delta[bp] = D.Delta[b] + 1
             D.obs[bp] = o
             obs_ind = obs_ind_dict[o]
             D.obs_prob[bp] = freqs[obs_ind] / curr_particle_num

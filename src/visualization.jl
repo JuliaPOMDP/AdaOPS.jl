@@ -2,7 +2,6 @@ function D3Trees.D3Tree(D::AdaOPSTree; title="AdaOPS Tree", kwargs...)
     lenb = D.b_len
     lenba = D.ba_len
     len = lenb + lenba
-    m = n_particles(D.root_belief)
     children = Vector{Vector{Int}}(undef, len)
     text = Vector{String}(undef, len)
     tt = fill("", len)

@@ -162,7 +162,7 @@ mutable struct AdaOPSTree{S,A,O}
     ba_r::Vector{Float64} # needed for backup
     ba_action::Vector{A}
 
-    root_belief::Union{WPFBelief, Missing}
+    root_belief::Any
     b_len::Int
     ba_len::Int
 end
@@ -200,8 +200,8 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
                          [0],
                          [0],
                          [0],
-                         Vector{Float64}(undef, 1),
-                         Vector{Float64}(undef, 1),
+                         [1.0],
+                         [0.0],
                          Vector{O}(undef, 1),
                          [1.0],
 
@@ -213,7 +213,7 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
                          Float64[],
                          A[],
 
-                         missing,
+                         initialstate(pomdp),
                          1,
                          0
                  )
