@@ -7,7 +7,7 @@ function build_tree(p::AdaOPSPlanner, b_0)
     while D.u[1]-D.l[1] > p.sol.epsilon_0 &&
           CPUtime_us()-start < p.sol.T_max*1e6 &&
           trial <= p.sol.max_trials
-        b = explore!(D, 1, p)
+        b = explore!(D, 1, p, start)
         backup!(D, b, p)
         trial += 1
     end
@@ -15,8 +15,9 @@ function build_tree(p::AdaOPSPlanner, b_0)
     return D
 end
 
-function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
+function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt64)
     while D.Delta[b] <= p.sol.D &&
+        CPUtime_us()-start < p.sol.T_max*1e6 &&
         excess_uncertainty(D, b, p) > 0.0
         if isempty(D.children[b]) # a leaf
             if p.sol.enable_state_dict

@@ -27,7 +27,7 @@ function build_tree_test(p::AdaOPSPlanner, b_0)
     while D.u[1]-D.l[1] > p.sol.epsilon_0 &&
           CPUtime_us()-start < p.sol.T_max*1e6 &&
           trial <= p.sol.max_trials
-        b, new_info = explore_test!(D, 1, p)
+        b, new_info = explore_test!(D, 1, p, start)
         extra_info[:k] = [extra_info[:k]; new_info[:k]]
         extra_info[:m] = [extra_info[:m]; new_info[:m]]
         extra_info[:branch] = [extra_info[:branch]; new_info[:branch]]
@@ -40,9 +40,10 @@ function build_tree_test(p::AdaOPSPlanner, b_0)
     return D::AdaOPSTree, extra_info
 end
 
-function explore_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
+function explore_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt64)
     extra_info = Dict(:k=>Int[], :m=>Int[], :branch=>Int[])
     while D.Delta[b] <= p.sol.D &&
+        CPUtime_us()-start < p.sol.T_max*1e6 &&
         excess_uncertainty(D, b, p) > 0.0
         if isempty(D.children[b]) # a leaf
             new_info = p.sol.enable_state_dict ? expand_enable_state_ind_dict_test!(D, b, p) : expand_test!(D, b, p)

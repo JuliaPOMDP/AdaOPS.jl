@@ -8,6 +8,7 @@ using Random
 using POMDPModelTools
 using ParticleFilters
 using BeliefUpdaters
+using CPUTime
 include("independent_bounds.jl")
 
 pomdp = BabyPOMDP()
@@ -63,7 +64,7 @@ b0 = initialstate(pomdp)
 D = @inferred AdaOPS.build_tree(p, b0)
 D, extra_info = build_tree_test(p, b0)
 extra_info_analysis(extra_info)
-@inferred AdaOPS.explore!(D, 1, p)
+@inferred AdaOPS.explore!(D, 1, p, CPUtime_us())
 @inferred AdaOPS.expand!(D, D.b_len, p)
 @inferred AdaOPS.backup!(D, 1, p)
 @inferred AdaOPS.next_best(D, 1, p)
