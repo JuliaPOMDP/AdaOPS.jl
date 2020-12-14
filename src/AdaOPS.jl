@@ -214,7 +214,7 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
                          A[],
 
                          initialstate(pomdp),
-                         1,
+                         typemax(Int),
                          0
                  )
 

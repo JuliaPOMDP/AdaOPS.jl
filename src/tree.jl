@@ -11,7 +11,7 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
     if p.sol.grid !== nothing
         tree.k[1] = 2
     end
-    tree.u[1] = 1.0
+    tree.u[1] = typemax(Int)
     tree.l[1] = 0.0
     tree.root_belief = b_0
 
