@@ -3,6 +3,7 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
     A = actiontype(p.pomdp)
     O = obstype(p.pomdp)
 
+    resize!(p.all_states, ceil(Int, p.sol.m_init*p.sol.m_max))
     tree = p.tree
     tree.b_len = 1
     tree.ba_len = 0
@@ -64,9 +65,10 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         curr_particle_num = 0
 
         # generate a initial packing
-        resize!(all_states, m)
+        all_terminal = true
         for i in 1:m
             if !isterminal(p.pomdp, b_resample.particles[i])
+                all_terminal = false
                 sp, o, r = @gen(:sp, :o, :r)(p.pomdp, b_resample.particles[i], a, p.rng)
                 Rsum += r
                 all_states[i] = sp
@@ -91,6 +93,11 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     ks[obs_ind] += 1
                 end
             end
+        end
+        if all_terminal
+            D.u[b] = 0.0
+            D.l[b] = 0.0
+            return nothing
         end
         # Initialize likelihood_sums and likelihood_square_sums such that the default ESS is Inf
         resize!(likelihood_sums, length(freqs))
@@ -119,6 +126,10 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         freqs[new_obs_ind] += freqs[obs_ind]
                         obs_ind_dict[o] = new_obs_ind
                         o = o′
+                        if p.sol.grid !== nothing && access(p.sol.grid, access_cnts[obs_ind], sp, p.pomdp)
+                            access_cnts[new_obs_ind] += access_cnts[obs_ind]
+                            ks[new_obs_ind] = count(x->x>0, access_cnts[new_obs_ind])
+                        end
                         break
                     end
                 end
@@ -133,7 +144,7 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
 
         while true
             curr_particle_num = m
-            ESS = p.sol.ESS ? likelihood_sums .* likelihood_sums ./ likelihood_square_sums : curr_particle_num
+            ESS = likelihood_sums .* likelihood_sums ./ likelihood_square_sums
             if p.sol.grid !== nothing
                 MESS = ks .|> x->p.sol.MESS(x, p.sol.zeta)
             else
@@ -147,7 +158,6 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                 resample!(b_resample, belief, m - n_particles(b_resample), p.rng)
             end
 
-            resize!(all_states, m)
             for (i, s) in enumerate(b_resample.particles[curr_particle_num+1:m])
                 if !isterminal(p.pomdp, s)
                     sp, o, r = @gen(:sp, :o, :r)(p.pomdp, s, a, p.rng)
@@ -241,6 +251,9 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
         D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
+    D.u[b] = maximum(D.ba_u[ba] for ba in D.children[b])
+    D.l[b] = maximum(D.ba_l[ba] for ba in D.children[b])
+    return nothing
 end
 
 function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
@@ -291,9 +304,10 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         curr_particle_num = 0
 
         # generate a initial packing
-        resize!(all_states, m)
+        all_terminal = true
         for i in 1:m
             if !isterminal(p.pomdp, b_resample.particles[i])
+                all_terminal = false
                 sp, o, r = @gen(:sp, :o, :r)(p.pomdp, b_resample.particles[i], a, p.rng)
                 Rsum += r
                 all_states[i] = sp
@@ -321,6 +335,11 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     ks[obs_ind] += 1
                 end
             end
+        end
+        if all_terminal
+            D.u[b] = 0.0
+            D.l[b] = 0.0
+            return nothing
         end
         # Initialize likelihood_sums and likelihood_square_sums such that the default ESS is Inf
         resize!(likelihood_sums, length(freqs))
@@ -350,6 +369,10 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         freqs[new_obs_ind] += freqs[obs_ind]
                         obs_ind_dict[o] = new_obs_ind
                         o = o′
+                        if p.sol.grid !== nothing && access(p.sol.grid, access_cnts[obs_ind], sp, p.pomdp)
+                            access_cnts[new_obs_ind] += access_cnts[obs_ind]
+                            ks[new_obs_ind] = count(x->x>0, access_cnts[new_obs_ind])
+                        end
                         break
                     end
                 end
@@ -364,7 +387,7 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
 
         while true
             curr_particle_num = m
-            ESS = p.sol.ESS ? likelihood_sums .* likelihood_sums ./ likelihood_square_sums : curr_particle_num
+            ESS = likelihood_sums .* likelihood_sums ./ likelihood_square_sums
             if p.sol.grid !== nothing
                 MESS = ks .|> x->p.sol.MESS(x, p.sol.zeta)
             else
@@ -378,7 +401,6 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                 resample!(b_resample, belief, m - n_particles(b_resample), p.rng)
             end
 
-            resize!(all_states, m)
             for (i, s) in enumerate(b_resample.particles[curr_particle_num+1:m])
                 if !isterminal(p.pomdp, s)
                     sp, o, r = @gen(:sp, :o, :r)(p.pomdp, s, a, p.rng)
@@ -485,6 +507,9 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
         D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
+    D.u[b] = maximum(D.ba_u[ba] for ba in D.children[b])
+    D.l[b] = maximum(D.ba_l[ba] for ba in D.children[b])
+    return nothing
 end
 
 function resize_b!(D::AdaOPSTree, n::Int)

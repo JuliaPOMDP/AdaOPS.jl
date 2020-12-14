@@ -100,9 +100,6 @@ Further information can be found in the field docstrings (e.g.
     "The initial number of particles at root. (no need to adjust)"
     m_init::Int                             = 50
 
-    "Whether to use effective sampling size"
-    ESS::Bool                               = true
-
     "At least m_min times of MESS(k_parent, zeta) particles are needed for estimating a belief."
     m_min::Float64                          = 0.6
 
@@ -141,6 +138,9 @@ Further information can be found in the field docstrings (e.g.
 
     "If true, a reprenstation of the constructed DESPOT is returned by POMDPModelTools.action_info."
     tree_in_info::Bool                      = false
+
+    "Issue an warning when the planning time surpass the time limit by `over_time_warning_threshold` times"
+    overtime_warning_threshold::Float64     = 1.5
 end
 
 mutable struct AdaOPSTree{S,A,O}

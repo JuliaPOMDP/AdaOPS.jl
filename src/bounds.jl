@@ -3,7 +3,7 @@ function bounds_sanity_check(pomdp::POMDP, b::WPFBelief, L, U)
         @warn("L ($L) > U ($U)   |ϕ| = $(n_particles(b))")
         @info("Try e.g. `IndependentBounds(l, u, consistency_fix_thresh=1e-5)`.", maxlog=1)
     end
-    if all(isterminal(pomdp, s) for s in particles(b))
+    if all(isterminal(pomdp, b.particles[i]) for i in 1:n_particles(b) if weight(b, i) > 0)
         if L != 0.0 || U != 0.0
             error(@sprintf("If all states are terminal, lower and upper bounds should be zero (L=%-10.2g, U=%-10.2g). (try IndependentBounds(l, u, check_terminal=true))", L, U))
         end
@@ -129,7 +129,7 @@ function init_bounds(bds::IndependentBounds, pomdp::POMDP, sol::AdaOPSSolver, rn
 end
 
 function bounds(bds::IndependentBounds, pomdp::POMDP, b::WPFBelief, bounds_warning::Bool = true)
-    if bds.check_terminal && all(isterminal(pomdp, s) for s in particles(b))
+    if bds.check_terminal && all(isterminal(pomdp, b.particles[i]) for i in 1:n_particles(b) if weight(b, i) > 0)
         return (0.0, 0.0)
     end
     l = bound(bds.lower, pomdp, b, bds.max_depth)
@@ -144,20 +144,22 @@ function bounds(bds::IndependentBounds, pomdp::POMDP, b::WPFBelief, bounds_warni
 end
 
 function bounds(bds::IndependentBounds, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Array{Float64,1}}, bounds_warning::Bool = true) where O
-    if bds.check_terminal && all(isterminal(pomdp, s) for s in b.particles)
-        return bounds((0.0, 0.0), pomdp, b, wdict, bounds_warning)
-    end
     l = bound(bds.lower, pomdp, b, wdict, bds.max_depth)
     u = bound(bds.upper, pomdp, b, wdict, bds.max_depth)
     bound_dict = Dict{O, Tuple{Float64, Float64}}()
     for (o, w) in wdict
-        if u[o] < l[o] && u[o] >= l[o]-bds.consistency_fix_thresh
-            u[o] = l[o]
+        if bds.check_terminal && all(isterminal(pomdp, b.particles[i]) for i in 1:length(w) if w[i] > 0)
+            bound_dict[o] = (0.0, 0.0)
+        else
+            if u[o] < l[o] && u[o] >= l[o]-bds.consistency_fix_thresh
+                u[o] = l[o]
+            end
+            if bounds_warning
+                switch_to_sibling!(b, o, w)
+                bounds_sanity_check(pomdp, b, l[o], u[o])
+            end
+            bound_dict[o] = (l[o], u[o])
         end
-        if bounds_warning
-            bounds_sanity_check(pomdp, b, l[o], u[o])
-        end
-        bound_dict[o] = (l[o], u[o])
     end
     return bound_dict
 end
@@ -286,14 +288,16 @@ POMDPLinter.@POMDP_require rollout(est::SolvedFORollout, pomdp::POMDP, start_sta
 end
 
 function estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, steps::Integer)
+    if steps <= 0 || weight_sum(b) == 0.0
+        return 0.0
+    end
     S = statetype(pomdp)
     O = obstype(pomdp)
-    odict = Dict{O, Vector{S}}()
-    wdict = Dict{O, Vector{Float64}}()
+    obs_ind_dict = Dict{O, Int}()
+    states = Array{S,1}[]
+    weights = Array{Float64,1}[]
+    probs = Float64[]
 
-    if steps <= 0
-        return 0
-    end
 
     a = action(est.policy, b)
 
@@ -302,12 +306,16 @@ function estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, st
         if !isterminal(pomdp, s)
             sp, o, r = @gen(:sp, :o, :r)(pomdp, s, a, est.rng)
 
-            if haskey(odict, o)
-                push!(odict[o], sp)
-                push!(wdict[o], weight(b, k) * obs_weight(pomdp, s, a, sp, o))
+            if haskey(obs_ind_dict, o)
+                obs_ind = obs_ind_dict[o]
+                push!(states[obs_ind], sp)
+                push!(weights[obs_ind], weight(b, k) * obs_weight(pomdp, s, a, sp, o))
+                probs[obs_ind] += weight(b, k)
             else
-                odict[o] = [sp]
-                wdict[o] = [weight(b, k) * obs_weight(pomdp, s, a, sp, o)]
+                push!(states, [sp])
+                push!(weights, [weight(b, k) * obs_weight(pomdp, s, a, sp, o)])
+                push!(probs, weight(b, k))
+                obs_ind_dict[o] = length(probs)
             end
 
             r_sum += r * weight(b, k)
@@ -315,23 +323,19 @@ function estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, st
     end
 
     U = 0.0
-    w_sum = 0.0
-    for (o, states) in odict
-        if length(states) == 1
+    for (o, obs_ind) in obs_ind_dict
+        if length(states[obs_ind]) == 1
             if hasmethod(action, (typeof(est.policy), S))
-                U += wdict[o][1] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, est.policy, states[1])
+                U += probs[obs_ind] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, est.policy, states[obs_ind][1])
             else
-                U += wdict[o][1] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, POtoFO(est.policy), states[1])
+                U += probs[obs_ind] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, POtoFO(est.policy), states[obs_ind][1])
             end
-            w_sum += wdict[o][1]
         else
-            bp = WPFBelief(states, wdict[o], o, depth=b.depth+1)
-            U += weight_sum(bp) * estimate_value(est, pomdp, bp, steps-1)
-            w_sum += weight_sum(bp)
+            bp = WPFBelief(states[obs_ind], weights[obs_ind], o, depth=b.depth+1)
+            U += probs[obs_ind] * estimate_value(est, pomdp, bp, steps-1)
         end
     end
-
-    return r_sum/weight_sum(b) + discount(pomdp)*U/w_sum
+    return (r_sum + discount(pomdp)*U)/weight_sum(b)
 end
 
 # For the partially observable simulation

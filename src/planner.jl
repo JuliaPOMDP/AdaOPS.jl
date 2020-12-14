@@ -11,7 +11,7 @@ function build_tree(p::AdaOPSPlanner, b_0)
         backup!(D, b, p)
         trial += 1
     end
-    if (CPUtime_us()-start)*1e-6 > p.sol.T_max*1.05
+    if (CPUtime_us()-start)*1e-6 > p.sol.T_max*p.sol.overtime_warning_threshold
         @warn "Surpass the time limit. The actual runtime is $((CPUtime_us()-start)*1e-6)s"
         println(p.sol)
     end
@@ -20,13 +20,15 @@ end
 
 function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt64)
     while D.Delta[b] <= p.sol.D &&
-        CPUtime_us()-start < p.sol.T_max*1e6 &&
-        excess_uncertainty(D, b, p) > 0.0
+        CPUtime_us()-start < p.sol.T_max*1e6
         if isempty(D.children[b]) # a leaf
             if p.sol.enable_state_dict
                 expand_enable_state_ind_dict!(D, b, p)
             else
                 expand!(D, b, p)
+            end
+            if excess_uncertainty(D, b, p) <= 0.0
+                break
             end
         end
         b = next_best(D, b, p)
