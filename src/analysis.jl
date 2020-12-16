@@ -27,36 +27,38 @@ function build_tree_test(p::AdaOPSPlanner, b_0)
     while D.u[1]-D.l[1] > p.sol.epsilon_0 &&
           CPUtime_us()-start < p.sol.T_max*1e6 &&
           trial <= p.sol.max_trials
-        b, new_info = explore_test!(D, 1, p, start)
+        new_info = explore_test!(D, 1, p, start)
         extra_info[:k] = [extra_info[:k]; new_info[:k]]
         extra_info[:m] = [extra_info[:m]; new_info[:m]]
         extra_info[:branch] = [extra_info[:branch]; new_info[:branch]]
-        push!(extra_info[:depth], D.Delta[b])
-        backup!(D, b, p)
+        extra_info[:depth] = [extra_info[:depth]; new_info[:depth]]
         trial += 1
     end
-    println("CPU Time is ", (CPUtime_us()-start)*1e-6)
+    println("The runtime is $((CPUtime_us()-start)*1e-6)s")
 
     return D::AdaOPSTree, extra_info
 end
 
 function explore_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt64)
-    extra_info = Dict(:k=>Int[], :m=>Int[], :branch=>Int[])
-    while D.Delta[b] <= p.sol.D &&
+    extra_info = Dict(:k=>Int[], :m=>Int[], :branch=>Int[], :depth=>Int[])
+    while D.Delta[b] < p.sol.D &&
         CPUtime_us()-start < p.sol.T_max*1e6
         if isempty(D.children[b]) # a leaf
-            new_info = p.sol.enable_state_dict ? expand_enable_state_ind_dict_test!(D, b, p) : expand_test!(D, b, p)
+            Δu, Δl, new_info = p.sol.enable_state_dict ? expand_enable_state_ind_dict_test!(D, b, p) : expand_test!(D, b, p)
             extra_info[:k] = [extra_info[:k]; new_info[:k]]
             extra_info[:m] = [extra_info[:m]; new_info[:m]]
             extra_info[:branch] = [extra_info[:branch]; new_info[:branch]]
-            if excess_uncertainty(D, b, p) <= 0.0
+            if backup!(D, b, p, Δu, Δl) || excess_uncertainty(D, b, p) <= 0.0
                 break
             end
         end
         b = next_best(D, b, p)
     end
-
-    return b::Int, extra_info
+    if D.Delta[b] == p.sol.D
+        make_default!(D, b, p)
+    end
+    push!(extra_info[:depth], D.Delta[b])
+    return extra_info
 end
 
 function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
@@ -136,9 +138,7 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             end
         end
         if all_terminal
-            D.u[b] = 0.0
-            D.l[b] = 0.0
-            return extra_info
+            return -D.u[b], -D.l[b], extra_info
         end
         # Initialize likelihood_sums and likelihood_square_sums such that the default ESS is Inf
         resize!(likelihood_sums, length(freqs))
@@ -167,7 +167,7 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         freqs[new_obs_ind] += freqs[obs_ind]
                         obs_ind_dict[o] = new_obs_ind
                         o = o′
-                        if p.sol.grid !== nothing && access(p.sol.grid, access_cnts[obs_ind], sp, p.pomdp)
+                        if p.sol.grid !== nothing
                             access_cnts[new_obs_ind] += access_cnts[obs_ind]
                             ks[new_obs_ind] = count(x->x>0, access_cnts[new_obs_ind])
                         end
@@ -298,9 +298,7 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
         D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
-    D.u[b] = maximum(D.ba_u[ba] for ba in D.children[b])
-    D.l[b] = maximum(D.ba_l[ba] for ba in D.children[b])
-    return extra_info
+    return maximum(D.ba_u[ba] for ba in D.children[b]) - D.u[b], maximum(D.ba_l[ba] for ba in D.children[b]) - D.l[b], extra_info
 end
 
 function expand_enable_state_ind_dict_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
@@ -385,9 +383,7 @@ function expand_enable_state_ind_dict_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlan
             end
         end
         if all_terminal
-            D.u[b] = 0.0
-            D.l[b] = 0.0
-            return extra_info
+            return -D.u[b], -D.l[b], extra_info
         end
         # Initialize likelihood_sums and likelihood_square_sums such that the default ESS is Inf
         resize!(likelihood_sums, length(freqs))
@@ -417,7 +413,7 @@ function expand_enable_state_ind_dict_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlan
                         freqs[new_obs_ind] += freqs[obs_ind]
                         obs_ind_dict[o] = new_obs_ind
                         o = o′
-                        if p.sol.grid !== nothing && access(p.sol.grid, access_cnts[obs_ind], sp, p.pomdp)
+                        if p.sol.grid !== nothing
                             access_cnts[new_obs_ind] += access_cnts[obs_ind]
                             ks[new_obs_ind] = count(x->x>0, access_cnts[new_obs_ind])
                         end
@@ -561,7 +557,5 @@ function expand_enable_state_ind_dict_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlan
         D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
         D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
-    D.u[b] = maximum(D.ba_u[ba] for ba in D.children[b])
-    D.l[b] = maximum(D.ba_l[ba] for ba in D.children[b])
-    return extra_info
+    return maximum(D.ba_u[ba] for ba in D.children[b]) - D.u[b], maximum(D.ba_l[ba] for ba in D.children[b]) - D.l[b], extra_info
 end

@@ -12,7 +12,7 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
     if p.sol.grid !== nothing
         tree.k[1] = 2
     end
-    tree.u[1] = typemax(Int)
+    tree.u[1] = Inf
     tree.l[1] = 0.0
     tree.root_belief = b_0
 
@@ -95,9 +95,7 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             end
         end
         if all_terminal
-            D.u[b] = 0.0
-            D.l[b] = 0.0
-            return nothing
+            return -D.u[b], -D.l[b]
         end
         # Initialize likelihood_sums and likelihood_square_sums such that the default ESS is Inf
         resize!(likelihood_sums, length(freqs))
@@ -126,7 +124,7 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         freqs[new_obs_ind] += freqs[obs_ind]
                         obs_ind_dict[o] = new_obs_ind
                         o = o′
-                        if p.sol.grid !== nothing && access(p.sol.grid, access_cnts[obs_ind], sp, p.pomdp)
+                        if p.sol.grid !== nothing
                             access_cnts[new_obs_ind] += access_cnts[obs_ind]
                             ks[new_obs_ind] = count(x->x>0, access_cnts[new_obs_ind])
                         end
@@ -251,9 +249,7 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
         D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
-    D.u[b] = maximum(D.ba_u[ba] for ba in D.children[b])
-    D.l[b] = maximum(D.ba_l[ba] for ba in D.children[b])
-    return nothing
+    return maximum(D.ba_u[ba] for ba in D.children[b]) - D.u[b], maximum(D.ba_l[ba] for ba in D.children[b]) - D.l[b]
 end
 
 function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
@@ -337,9 +333,7 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             end
         end
         if all_terminal
-            D.u[b] = 0.0
-            D.l[b] = 0.0
-            return nothing
+            return -D.u[b], -D.l[b]
         end
         # Initialize likelihood_sums and likelihood_square_sums such that the default ESS is Inf
         resize!(likelihood_sums, length(freqs))
@@ -369,7 +363,7 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         freqs[new_obs_ind] += freqs[obs_ind]
                         obs_ind_dict[o] = new_obs_ind
                         o = o′
-                        if p.sol.grid !== nothing && access(p.sol.grid, access_cnts[obs_ind], sp, p.pomdp)
+                        if p.sol.grid !== nothing
                             access_cnts[new_obs_ind] += access_cnts[obs_ind]
                             ks[new_obs_ind] = count(x->x>0, access_cnts[new_obs_ind])
                         end
@@ -507,9 +501,7 @@ function expand_enable_state_ind_dict!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
         D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
-    D.u[b] = maximum(D.ba_u[ba] for ba in D.children[b])
-    D.l[b] = maximum(D.ba_l[ba] for ba in D.children[b])
-    return nothing
+    return maximum(D.ba_u[ba] for ba in D.children[b]) - D.u[b], maximum(D.ba_l[ba] for ba in D.children[b]) - D.l[b]
 end
 
 function resize_b!(D::AdaOPSTree, n::Int)

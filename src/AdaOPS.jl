@@ -109,7 +109,7 @@ Further information can be found in the field docstrings (e.g.
     "Return the minimum effective sample size needed for accurate estimation"
     MESS::Function                          = KLDSampleSize
 
-    "Enable state dict (useful only when the state space is small)"
+    "Enable state dict (state dict may be costly when the state space is continuous and the transition is stochastic)"
     enable_state_dict::Bool                 = true
 
     "The maximum depth of the DESPOT."
@@ -151,7 +151,7 @@ mutable struct AdaOPSTree{S,A,O}
     k::Vector{Int}
     u::Vector{Float64}
     l::Vector{Float64}
-    obs::Vector{O}
+    obs::Vector{Float64}
     obs_prob::Vector{Float64}
 
     ba_particles::Vector{Vector{S}} # stores particles for *ba nodes*
@@ -171,19 +171,19 @@ struct AdaOPSPlanner{P<:POMDP, B, RNG<:AbstractRNG, S, O} <: Policy
     sol::AdaOPSSolver
     pomdp::P
     bounds::B
-    discounts::Array{Float64,1}
+    discounts::Vector{Float64}
     rng::RNG
     # The following attributes are used to avoid reallocating memory
     tree::AdaOPSTree
-    all_states::Array{S, 1}
+    all_states::Vector{S}
     state_ind_dict::Dict{S, Int}
-    wdict::Dict{O, Array{Float64, 1}}
+    wdict::Dict{O, Vector{Float64}}
     obs_ind_dict::Dict{O, Int}
-    freqs::Array{Float64, 1}
-    likelihood_sums::Array{Float64, 1}
-    likelihood_square_sums::Array{Float64, 1}
+    freqs::Vector{Float64}
+    likelihood_sums::Vector{Float64}
+    likelihood_square_sums::Vector{Float64}
     access_cnts::Union{Array, Nothing}
-    ks::Union{Array{Int, 1}, Nothing}
+    ks::Union{Vector{Int}, Nothing}
 end
 
 function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
@@ -200,13 +200,13 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
                          [0],
                          [0],
                          [0],
-                         [1.0],
+                         [Inf],
                          [0.0],
                          Vector{O}(undef, 1),
                          [1.0],
 
-                         Array{S,1}[],
-                         Array{Int,1}[],
+                         Vector{S}[],
+                         Vector{Int}[],
                          Int[],
                          Float64[],
                          Float64[],
@@ -214,7 +214,7 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
                          A[],
 
                          initialstate(pomdp),
-                         typemax(Int),
+                         1,
                          0
                  )
 
@@ -226,7 +226,7 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
         ks = nothing
     end
     return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng,
-                        tree, S[], Dict{S, Int}(), Dict{O, Array{Float64,1}}(),
+                        tree, S[], Dict{S, Int}(), Dict{O, Vector{Float64}}(),
                         Dict{O, Int}(), Float64[], Float64[], Float64[], access_cnts, ks)
 end
 
