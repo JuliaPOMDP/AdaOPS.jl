@@ -151,7 +151,7 @@ mutable struct AdaOPSTree{S,A,O}
     k::Vector{Int}
     u::Vector{Float64}
     l::Vector{Float64}
-    obs::Vector{Float64}
+    obs::Vector{O}
     obs_prob::Vector{Float64}
 
     ba_particles::Vector{Vector{S}} # stores particles for *ba nodes*
