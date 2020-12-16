@@ -86,5 +86,5 @@ function next_best(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
 end
 
 function excess_uncertainty(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    return D.obs_prob[b] * (D.u[b]-D.l[b] - p.sol.xi * (D.u[1]-D.l[1]) / p.discounts[D.Delta[b]+1])
+    return D.obs_prob[b] * (D.u[b]-D.l[b] - p.sol.xi * max(D.u[1]-D.l[1], 0.0) / p.discounts[D.Delta[b]+1])
 end
