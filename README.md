@@ -50,19 +50,14 @@ A StateGrid is consist of an arrays of cutpoints in each dimension. These cutpoi
 For example, a StateGrid can be defined as `StateGrid(convert, [dim1_cutpoints], [dim2_cutpoints], [dim3_cutpoints])`.
 All states lie in one tile will be taken as the same.
 With the number of tiles that a belief occupies, we can estimate the number of particles needed to estimate it.
-#### ESS
-`ESS` is an option to decide whether to calculate the number of particles needed by using effective sample size rather than the actual sample size.
-#### m_max
-`m_max` is the maximum times of `m_init` particles we can afford to estimate a belief. Since `AdaOPS` is an online planning algorithm, we must balance between the accuracy and the speed.
+#### sigma
+`sigma` is the maximum times of `m_init` particles we can afford to estimate a belief. Since `AdaOPS` is an online planning algorithm, we must balance between the accuracy and the speed.
 
 ### Packing
 #### delta
 A delta-packing of observation branches will be generated, i.e., the belief nodes with L1 distance less than delta are merged.
 #### m_init
 `m_init` is the least number of particles needed to estimate a belief. Only when a belief is consist of at least `m_init`, we can estimate the L1 distance between observation branches and merge the similar ones.
-#### m_min
-`m_min` is minimum times of `MESS(k_parent, zeta)` particles needed to estimate the belief, where `k_parent` is the number of tiles the parent belief node occupies.
-The intuition is that the more dispersive the parent belief is, the more dispersive the child belief might be. Therefore, by using `m_min`, we can avoid that distinct observation branches are carelessly merged because the particles used is not enough.
 ### Bounds
 
 #### Tuple bounds
