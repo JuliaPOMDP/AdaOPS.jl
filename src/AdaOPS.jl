@@ -97,20 +97,14 @@ Further information can be found in the field docstrings (e.g.
     "State grid for adaptive particle filters"
     grid::Union{Nothing, StateGrid}         = nothing
 
-    "The initial number of particles at root. (no need to adjust)"
-    m_init::Int                             = 50
+    "The initial number of particles at root."
+    m_init::Int                             = 30
 
-    "At least m_min times of MESS(k_parent, zeta) particles are needed for estimating a belief."
-    m_min::Float64                          = 0.6
-
-    "At most m_max times of m_init particles are allowed for estimating a belief."
-    m_max::Float64                          = 10.0
+    "At most sigma times of m_init particles are allowed for estimating a belief."
+    sigma::Float64                          = 10.0
 
     "Return the minimum effective sample size needed for accurate estimation"
     MESS::Function                          = KLDSampleSize
-
-    "Enable state dict (state dict may be costly when the state space is continuous and the transition is stochastic)"
-    enable_state_dict::Bool                 = true
 
     "The maximum depth of the DESPOT."
     D::Int                                  = 90
@@ -175,9 +169,11 @@ struct AdaOPSPlanner{P<:POMDP, B, RNG<:AbstractRNG, S, O} <: Policy
     rng::RNG
     # The following attributes are used to avoid reallocating memory
     tree::AdaOPSTree
-    all_states::Vector{S}
+    resampled::Vector{S}
+    all_states::Vector{Union{S, Missing}}
     state_ind_dict::Dict{S, Int}
     wdict::Dict{O, Vector{Float64}}
+    norm_w::Vector{Vector{Float64}}
     obs_ind_dict::Dict{O, Int}
     freqs::Vector{Float64}
     likelihood_sums::Vector{Float64}
@@ -225,8 +221,10 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
         access_cnts = nothing
         ks = nothing
     end
-    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng,
-                        tree, S[], Dict{S, Int}(), Dict{O, Vector{Float64}}(),
+    m_max = ceil(Int, sol.sigma * sol.m_init)
+    norm_w = [Vector{Float64}(undef, sol.m_init) for i in 1:m_max]
+    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, tree, Vector{S}(undef, m_max),
+                        Vector{Union{S,Missing}}(undef, m_max), Dict{S, Int}(), Dict{O, Vector{Float64}}(), norm_w,
                         Dict{O, Int}(), Float64[], Float64[], Float64[], access_cnts, ks)
 end
 

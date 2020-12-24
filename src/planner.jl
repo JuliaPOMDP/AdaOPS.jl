@@ -21,7 +21,7 @@ function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt64)
     while D.Delta[b] < p.sol.D &&
         CPUtime_us()-start < p.sol.T_max*1e6
         if isempty(D.children[b]) # a leaf
-            Δu, Δl = p.sol.enable_state_dict ? expand_enable_state_ind_dict!(D, b, p) : expand!(D, b, p)
+            Δu, Δl = expand!(D, b, p)
             if backup!(D, b, p, Δu, Δl) || excess_uncertainty(D, b, p) <= 0.0
                 break
             end
@@ -36,7 +36,7 @@ function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt64)
 end
 
 function make_default!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    Δu, Δl = p.sol.enable_state_dict ? expand_enable_state_ind_dict!(D, b, p) : expand!(D, b, p)
+    Δu, Δl = expand!(D, b, p)
     for ba in D.children[b]
         for bp in D.ba_children[ba]
             D.ba_u[ba] += discount(p.pomdp) * D.obs_prob[bp] * (D.l[bp] - D.u[bp])

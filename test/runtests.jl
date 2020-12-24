@@ -52,10 +52,8 @@ solver = AdaOPSSolver(bounds=bds,
                       rng=MersenneTwister(4),
                       grid=grid,
                       zeta=0.04,
-                      delta=0.04,
                       xi=0.1,
                       m_init=30,
-                      m_min=1.0,
                       tree_in_info=true
                      )
 p = solve(solver, pomdp)
@@ -81,7 +79,7 @@ pomdp = BabyPOMDP()
 
 # constant bounds
 bds = (reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
-solver = AdaOPSSolver(bounds=bds, zeta=0.04, delta=0.01, xi=0.1, m_min=1.0, grid=grid, enable_state_dict=false)
+solver = AdaOPSSolver(bounds=bds, zeta=0.04, xi=0.1, grid=grid)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=100)
 @time hist = simulate(hr, pomdp, planner)
@@ -89,7 +87,7 @@ println("Discounted reward is $(discounted_reward(hist))")
 
 # FO policy lower bound
 bds = IndependentBounds(SemiPORollout(FeedWhenCrying()), 0.0)
-solver = AdaOPSSolver(bounds=bds, zeta=0.04, delta=0.01, xi=0.1, m_min=1.0, grid=grid)
+solver = AdaOPSSolver(bounds=bds, zeta=0.04, xi=0.1, grid=grid)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=100)
 @time hist = simulate(hr, pomdp, planner)
@@ -97,7 +95,7 @@ println("Discounted reward is $(discounted_reward(hist))")
 
 # PO policy lower bound
 bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
-solver = AdaOPSSolver(bounds=bds, zeta=0.04, delta=0.01, xi=0.1, m_min=1.0, grid=nothing)
+solver = AdaOPSSolver(bounds=bds, zeta=0.04, xi=0.1, grid=nothing)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=100)
 @time hist = simulate(hr, pomdp, planner)

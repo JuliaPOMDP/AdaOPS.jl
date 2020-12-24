@@ -47,8 +47,8 @@ function POMDPs.history(belief::WPFBelief)
     return belief._hist
 end
 
-function resample(b::WPFBelief{S}, m::Int, rng::AbstractRNG) where {S}
-    particle_set = Array{S}(undef, m)
+function resample!(particle_set::Vector{S}, b::WPFBelief{S}, rng::AbstractRNG) where S
+    m = length(particle_set)
     step = weight_sum(b)/m
     U = rand(rng)*step
     c = weight(b,1) # accumulate sum of weights
@@ -61,34 +61,14 @@ function resample(b::WPFBelief{S}, m::Int, rng::AbstractRNG) where {S}
         U += step
         particle_set[particle] = particles(b)[i]
     end
-    return ParticleCollection(particle_set)
+    return nothing
 end
 
-Base.rand(rng::AbstractRNG, b, m::Int) = [rand(rng, b) for i in 1:m]
-resample(b, m::Int, rng::AbstractRNG) = ParticleCollection(rand(rng, b, m))
-
-function resample!(b_resample::ParticleCollection, b::WPFBelief, m::Int, rng::AbstractRNG)
-    start_ind = n_particles(b_resample) + 1
-    end_ind = n_particles(b_resample) + m
-    resize!(b_resample.particles, end_ind)
-    step = weight_sum(b)/m
-    U = rand(rng)*step
-    c = weight(b,1) # accumulate sum of weights
-    i = 1
-    for particle in start_ind:end_ind
-        while U > c
-            i += 1
-            c += weight(b, i)
-        end
-        U += step
-        b_resample.particles[particle] = particles(b)[i]
+function resample!(particle_set::Vector{S}, b, rng::AbstractRNG) where S
+    for i in 1:length(particle_set)
+        particle_set[i] = rand(rng, b)
     end
-    return nothing::Nothing
-end
-
-function resample!(b_resample::ParticleCollection, b, m::Int, rng::AbstractRNG)
-    b_resample.particles = [b_resample.particles; rand(rng, b, m)]
-    return nothing::Nothing
+    return nothing
 end
 
 function switch_to_sibling!(b::WPFBelief, obs, weights::Array{Float64,1})
