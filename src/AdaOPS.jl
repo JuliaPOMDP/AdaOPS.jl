@@ -214,14 +214,14 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
                          0
                  )
 
+    m_max = ceil(Int, sol.sigma * sol.m_init)
     if sol.grid !== nothing
-        access_cnts = Array{Int, length(sol.grid)}[] # store the access_count grid for each observation branch
+        access_cnts = [zeros_like(sol.grid) for i in 1:m_max]
         ks = Int[] # track the dispersion of child beliefs
     else
         access_cnts = nothing
         ks = nothing
     end
-    m_max = ceil(Int, sol.sigma * sol.m_init)
     norm_w = [Vector{Float64}(undef, sol.m_init) for i in 1:m_max]
     return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, tree, Vector{S}(undef, m_max),
                         Vector{Union{S,Missing}}(undef, m_max), Dict{S, Int}(), Dict{O, Vector{Float64}}(), norm_w,

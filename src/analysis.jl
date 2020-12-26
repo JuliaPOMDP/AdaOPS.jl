@@ -131,11 +131,7 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     obs_ind_dict[o] = length(freqs)
                     obs_ind = obs_ind_dict[o]
                     if p.sol.grid !== nothing
-                        if obs_ind <= length(access_cnts)
-                            fill!(access_cnts[obs_ind], 0)
-                        else
-                            push!(access_cnts, zeros_like(p.sol.grid))
-                        end
+                        fill!(access_cnts[obs_ind], 0)
                         push!(ks, 0)
                     end
                 end
@@ -284,11 +280,7 @@ function expand_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                             wdict[o] = w
                             obs_ind_dict[o] = obs_ind
                             if p.sol.grid !== nothing
-                                if obs_ind <= length(access_cnts)
-                                    fill!(access_cnts[obs_ind], 0)
-                                else
-                                    push!(access_cnts, zeros_like(p.sol.grid))
-                                end
+                                fill!(access_cnts[obs_ind], 0)
                                 push!(ks, 0)
                             end
                             bp += 1
