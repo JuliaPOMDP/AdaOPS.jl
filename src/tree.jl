@@ -69,7 +69,7 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         while nonterminal < m_min && curr_particle_num < m_max
             curr_particle_num += 1
             if isterminal(p.pomdp, resampled[curr_particle_num])
-                all_states[curr_particle_num+i] = missing
+                all_states[curr_particle_num] = missing
             else
                 nonterminal += 1
                 sp, o, r = @gen(:sp, :o, :r)(p.pomdp, resampled[curr_particle_num], a, p.rng)
