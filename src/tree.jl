@@ -194,8 +194,6 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         resize!(w, length(next_states))
                         fill!(w, 0.0)
                         obs_ind = length(freqs) + 1
-                        normalized_w = norm_w[obs_ind]
-                        resize!(normalized_w, length(first(norm_w)))
                         likelihood_sum = 0.0
                         likelihood_square_sum = 0.0
                         for j in 1:m_for_packing
@@ -206,11 +204,12 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                                 likelihood_square_sum += likelihood * likelihood
                                 state_ind = state_ind_dict[all_states[j]]
                                 w[state_ind] += likelihood
-                                normalized_w[state_ind] += likelihood
                             end
                         end
                         if p.sol.delta > 0.0
-                            normalized_w ./= likelihood_sum
+                            normalized_w = norm_w[obs_ind]
+                            resize!(normalized_w, length(first(norm_w)))
+                            normalized_w[:] = w[1:length(normalized_w)] ./ likelihood_sum
                             for (o′, w′) in wdict
                                 new_obs_ind = obs_ind_dict[o′]
                                 if norm(normalized_w - norm_w[new_obs_ind], 1) <= p.sol.delta
