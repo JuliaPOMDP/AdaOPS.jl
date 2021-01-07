@@ -11,7 +11,7 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
     if p.sol.grid !== nothing
         tree.k[1] = 2
     end
-    tree.u[1] = Inf
+    tree.u[1] = 1e100 # Should be at least V_max 
     tree.l[1] = 0.0
     tree.root_belief = b_0
 
@@ -285,7 +285,7 @@ end
 
 function resize_b!(D::AdaOPSTree, n::Int)
     if n > length(D.weights)
-        for i in length(D.weights):n
+        for i in (length(D.weights)+1):n
             push!(D.children, Int[])
         end
         resize!(D.weights, n)
