@@ -11,7 +11,7 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
     if p.sol.grid !== nothing
         tree.k[1] = 2
     end
-    tree.u[1] = 1e100 # Should be at least V_max 
+    tree.u[1] = 10000.0 # Should be at least V_max but not to big for numerical reasons
     tree.l[1] = 0.0
     tree.root_belief = b_0
 
