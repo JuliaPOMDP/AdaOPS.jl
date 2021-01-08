@@ -55,9 +55,8 @@ function expand_without_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         empty!(freqs)
         empty!(obs_ind_dict)
 
-        ba += 1
         Rsum = 0.0
-        next_states = D.ba_particles[ba]
+        next_states = D.ba_particles[ba+1]
         empty!(next_states)
         curr_particle_num = 0
         nonterminal = 0
@@ -82,6 +81,9 @@ function expand_without_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     obs_ind = obs_ind_dict[o]
                 end
             end
+        end
+        if nonterminal == 0
+            return -D.u[b], -D.l[b]
         end
 
         m_for_packing = curr_particle_num
@@ -203,6 +205,12 @@ function expand_without_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                 freqs[obs_ind] += weight(belief, curr_particle_num+i)
             end
         end
+
+        if isempty(wdict)
+            continue
+        end
+        ba += 1
+
         curr_particle_num = m_max
 
         D.ba_children[ba] = [D.b_len+1:bp;]
@@ -233,7 +241,10 @@ function expand_without_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
         D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
-    D.ba_len += length(acts)
+    if D.ba_len == ba
+        return -D.u[b], -D.l[b]
+    end
+    D.ba_len = ba
     return maximum(D.ba_u[ba] for ba in D.children[b]) - D.u[b], maximum(D.ba_l[ba] for ba in D.children[b]) - D.l[b]
 end
 
@@ -310,6 +321,9 @@ function expand_with_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     ks[obs_ind] += 1
                 end
             end
+        end
+        if nonterminal == 0
+            return -D.u[b], -D.l[b]
         end
         m_for_packing = curr_particle_num
         m = curr_particle_num
