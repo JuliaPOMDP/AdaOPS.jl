@@ -72,7 +72,6 @@ extra_info_analysis(D, extra_info)
 @inferred action(p, b0)
 
 # visualization
-show(stdout, MIME("text/plain"), D)
 a, info = action_info(p, initialstate(pomdp))
 show(stdout, MIME("text/plain"), info[:tree])
 

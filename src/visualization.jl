@@ -9,16 +9,18 @@ function D3Trees.D3Tree(D::AdaOPSTree; title="AdaOPS Tree", kwargs...)
     for b in 1:lenb
         children[b] = D.children[b] .+ lenb
         text[b] = @sprintf("""
-                           o:%s prob:%6.2f
+                           o:%s prob:%6.2f Deff:%6.2f
                            l:%6.2f, u:%6.2f""",
                            b==1 ? "<root>" : string(D.obs[b]),
                            D.obs_prob[b],
+                           D.Deff[b],
                            D.l[b],
                            D.u[b],
                           )
         tt[b] = """
                 o: $(b==1 ? "<root>" : string(D.obs[b]))
                 prob: $(D.obs_prob[b])
+                Deff:$(D.Deff[b])
                 l: $(D.l[b])
                 u: $(D.u[b])
                 $(length(D.children[b])) children

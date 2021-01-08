@@ -41,7 +41,7 @@ adaops = solve(solver, m)
 @time action(adaops, b0)
 # show(stdout, MIME("text/plain"), info[:tree])
 D, extra_info = build_tree_test(adaops, b0)
-# show(stdout, MIME("text/plain"), D)
+show(stdout, MIME("text/plain"), D)
 extra_info_analysis(D, extra_info)
 
 num_particles = 30000

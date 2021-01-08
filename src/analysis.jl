@@ -291,10 +291,10 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
         D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
-    D.ba_len = ba
     if D.ba_len == ba
         return -D.u[b], -D.l[b], extra_info
     end
+    D.ba_len = ba
     return maximum(D.ba_u[ba] for ba in D.children[b]) - D.u[b], maximum(D.ba_l[ba] for ba in D.children[b]) - D.l[b], extra_info
 end
 

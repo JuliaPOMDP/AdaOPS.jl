@@ -11,9 +11,10 @@ function TextTree(D::AdaOPSTree)
     text = Vector{String}(len)
     for b in 1:lenb
         children[b] = D.children[b] .+ lenb
-        text[b] = @sprintf("o:%-5s prob:%6.2f u:%6.2f, l:%6.2f",
+        text[b] = @sprintf("o:%-5s prob:%6.2f Deff:%6.2f u:%6.2f, l:%6.2f",
                            b==1 ? "<root>" : string(D.obs[b]),
                            D.obs_prob[b],
+                           D.Deff[b],
                            D.u[b],
                            D.l[b],
                             )
