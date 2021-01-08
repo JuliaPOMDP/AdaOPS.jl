@@ -156,6 +156,9 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     w[j] += likelihood
                 end
             end
+            if likelihood_sum == 0
+                continue
+            end
             if p.sol.delta > 0.0
                 resize!(norm_w[obs_ind], length(w))
                 norm_w[obs_ind][:] = w ./ likelihood_sum
@@ -208,6 +211,9 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                             likelihood_square_sum += likelihood * likelihood
                             w[j] += likelihood
                         end
+                    end
+                    if likelihood_sum == 0
+                        continue
                     end
                     if p.sol.delta > 0.0
                         normalized_w = norm_w[obs_ind]
