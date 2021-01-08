@@ -9,6 +9,8 @@ using POMDPModelTools
 using ParticleFilters
 using BeliefUpdaters
 using CPUTime
+
+include("rocksample_test.jl")
 include("independent_bounds.jl")
 
 pomdp = BabyPOMDP()
@@ -52,7 +54,6 @@ solver = AdaOPSSolver(bounds=bds,
                       rng=MersenneTwister(4),
                       grid=grid,
                       zeta=0.04,
-                      xi=0.1,
                       m_init=30,
                       tree_in_info=true
                      )
@@ -65,7 +66,6 @@ extra_info_analysis(extra_info)
 @inferred AdaOPS.explore!(D, 1, p, CPUtime_us())
 Δu, Δl = @inferred AdaOPS.expand!(D, D.b_len, p)
 @inferred AdaOPS.backup!(D, 1, p, Δu, Δl)
-@inferred AdaOPS.make_default!(D, D.b_len, p)
 @inferred AdaOPS.next_best(D, 1, p)
 @inferred AdaOPS.excess_uncertainty(D, 1, p)
 @inferred action(p, b0)

@@ -55,7 +55,7 @@ function explore_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt64)
         b = next_best(D, b, p)
     end
     if D.Delta[b] == p.sol.D
-        make_default!(D, b, p)
+        backup!(D, b, p, -D.u[b], -D.l[b])
     end
     push!(extra_info[:depth], D.Delta[b])
     return extra_info

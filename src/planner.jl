@@ -33,22 +33,10 @@ function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt64)
         b = next_best(D, b, p)
     end
     if D.Delta[b] == p.sol.D
-        make_default!(D, b, p)
+        backup!(D, b, p, -D.u[b], -D.l[b])
     end
 
     return nothing
-end
-
-function make_default!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    Δu, Δl = expand!(D, b, p)
-    for ba in D.children[b]
-        for bp in D.ba_children[ba]
-            D.ba_u[ba] += discount(p.pomdp) * D.obs_prob[bp] * (D.l[bp] - D.u[bp])
-            D.u[bp] = D.l[bp]
-        end
-    end
-    Δu += maximum(D.ba_u[ba] for ba in D.children[b]) - D.u[b]
-    backup!(D, b, p, Δu, Δl)
 end
 
 function backup!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, Δu::Float64, Δl::Float64)
