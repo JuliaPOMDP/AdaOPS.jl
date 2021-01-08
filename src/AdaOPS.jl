@@ -106,6 +106,9 @@ Further information can be found in the field docstrings (e.g.
     "Return the minimum effective sample size needed for accurate estimation"
     MESS::Function                          = KLDSampleSize
 
+    "Resample when the design effect of a belief node exceed Deff_thres"
+    Deff_thres::Float64                     = 2.0
+
     "The maximum depth of the DESPOT."
     D::Int                                  = 90
 
@@ -147,6 +150,7 @@ mutable struct AdaOPSTree{S,A,O}
     l::Vector{Float64}
     obs::Vector{O}
     obs_prob::Vector{Float64}
+    Deff::Vector{Float64}
 
     ba_particles::Vector{Vector{S}} # stores particles for *ba nodes*
     ba_children::Vector{Vector{Int}}
@@ -171,7 +175,6 @@ struct AdaOPSPlanner{P<:POMDP, B, RNG<:AbstractRNG, S, O} <: Policy
     tree::AdaOPSTree
     resampled::Vector{S}
     all_states::Vector{Union{S, Missing}}
-    state_ind_dict::Dict{S, Int}
     wdict::Dict{O, Vector{Float64}}
     norm_w::Vector{Vector{Float64}}
     obs_ind_dict::Dict{O, Int}
@@ -200,6 +203,7 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
                          [0.0],
                          Vector{O}(undef, 1),
                          [1.0],
+                         [Inf],
 
                          Vector{S}[],
                          Vector{Int}[],
@@ -224,7 +228,7 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
     end
     norm_w = [Vector{Float64}(undef, sol.m_init) for i in 1:m_max]
     return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, tree, Vector{S}(undef, m_max),
-                        Vector{Union{S,Missing}}(undef, m_max), Dict{S, Int}(), Dict{O, Vector{Float64}}(), norm_w,
+                        Vector{Union{S,Missing}}(undef, m_max), Dict{O, Vector{Float64}}(), norm_w,
                         Dict{O, Int}(), Float64[], Float64[], Float64[], access_cnts, ks)
 end
 
