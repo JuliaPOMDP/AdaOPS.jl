@@ -21,16 +21,12 @@ m = rsgen(map)
 b0 = initialstate(m)
 s0 = rand(b0)
 
-convert(s::RSState, pomdp::RockSamplePOMDP) = [sum(s.rocks)]
-grid = StateGrid(convert, range(1, stop=map[2], length=map[2])[2:end])
-
 bound = AdaOPS.IndependentBounds(FORollout(move_east), map[2]*10.0, check_terminal=true, consistency_fix_thresh=1e-5)
 
 solver = AdaOPSSolver(bounds=bound,
-                        grid=grid,
-                        delta=0.02,
+                        delta=1.0,
                         zeta=0.01,
-                        m_init=30,
+                        m_init=15,
                         sigma=2.0,
                         bounds_warnings=true,
                         default_action=move_east,

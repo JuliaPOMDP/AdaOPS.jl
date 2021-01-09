@@ -376,7 +376,7 @@ function expand_with_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             if p.sol.grid !== nothing
                 MESS = ks .|> x->p.sol.MESS(x, p.sol.zeta)
             else
-                MESS = m_min
+                MESS = m_max
             end
             m = ceil(Int, min(m_max, maximum(curr_particle_num .* MESS ./ ESS)))
             if curr_particle_num >= m
