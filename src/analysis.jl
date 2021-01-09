@@ -145,8 +145,7 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         bp = D.b_len
         for (o, obs_ind) in obs_ind_dict
             w = length(D.weights) > bp ? D.weights[bp+1] : Float64[]
-            resize!(w, length(next_states))
-            fill!(w, 0.0)
+            empty!(w)
             likelihood_sum = 0.0
             likelihood_square_sum = 0.0
             for j in 1:m
@@ -155,7 +154,7 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     likelihood = weight(belief, j) * pdf(observation(p.pomdp, a, all_states[j]), o)
                     likelihood_sum += likelihood
                     likelihood_square_sum += likelihood * likelihood
-                    w[j] += likelihood
+                    push!(w, likelihood)
                 end
             end
             if likelihood_sum == 0
@@ -200,8 +199,7 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                 end
                 if !haskey(obs_ind_dict, o)
                     w = length(D.weights) > bp ? D.weights[bp+1] : Float64[]
-                    resize!(w, length(next_states))
-                    fill!(w, 0.0)
+                    empty!(w)
                     obs_ind = length(freqs) + 1
                     likelihood_sum = 0.0
                     likelihood_square_sum = 0.0
@@ -211,7 +209,7 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                             likelihood = weight(belief, j) * pdf(observation(p.pomdp, a, all_states[j]), o)
                             likelihood_sum += likelihood
                             likelihood_square_sum += likelihood * likelihood
-                            w[j] += likelihood
+                            push!(w, likelihood)
                         end
                     end
                     if likelihood_sum == 0
@@ -237,7 +235,7 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                                 likelihood = weight(belief, j) * pdf(observation(p.pomdp, a, all_states[j]), o)
                                 likelihood_sum += likelihood
                                 likelihood_square_sum += likelihood * likelihood
-                                w[j] += likelihood
+                                push!(w, likelihood)
                             end
                         end
                         push!(freqs, 0)
@@ -386,8 +384,7 @@ function expand_with_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         bp = D.b_len
         for (o, obs_ind) in obs_ind_dict
             w = length(D.weights) > bp ? D.weights[bp+1] : Float64[]
-            resize!(w, length(next_states))
-            fill!(w, 0.0)
+            empty!(w)
             likelihood_sum = 0.0
             likelihood_square_sum = 0.0
             for j in 1:m
@@ -396,7 +393,7 @@ function expand_with_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     likelihood = pdf(observation(p.pomdp, a, all_states[j]), o)
                     likelihood_sum += likelihood
                     likelihood_square_sum += likelihood * likelihood
-                    w[j] += likelihood
+                    push!(w, likelihood)
                 end
             end
             if p.sol.delta > 0.0
@@ -455,8 +452,7 @@ function expand_with_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     end
                     if !haskey(obs_ind_dict, o)
                         w = length(D.weights) > bp ? D.weights[bp+1] : Float64[]
-                        resize!(w, length(next_states))
-                        fill!(w, 0.0)
+                        empty!(w)
                         obs_ind = length(freqs) + 1
                         likelihood_sum = 0.0
                         likelihood_square_sum = 0.0
@@ -466,7 +462,7 @@ function expand_with_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                                 likelihood = pdf(observation(p.pomdp, a, all_states[j]), o)
                                 likelihood_sum += likelihood
                                 likelihood_square_sum += likelihood * likelihood
-                                w[j] += likelihood
+                                push!(w, likelihood)
                             end
                         end
                         if p.sol.delta > 0.0
@@ -489,7 +485,7 @@ function expand_with_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                                     likelihood = pdf(observation(p.pomdp, a, all_states[j]), o)
                                     likelihood_sum += likelihood
                                     likelihood_square_sum += likelihood * likelihood
-                                    w[j] += likelihood
+                                    push!(w, likelihood)
                                 end
                             end
                             push!(freqs, 0)
