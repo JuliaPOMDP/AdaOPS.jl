@@ -227,9 +227,14 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
         ks = nothing
     end
     norm_w = [Vector{Float64}(undef, sol.m_init) for i in 1:m_max]
-    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, tree, Vector{S}(undef, m_max),
+    planner = AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, tree, Vector{S}(undef, m_max),
                         Vector{Union{S,Missing}}(undef, m_max), Dict{O, Vector{Float64}}(), norm_w,
                         Dict{O, Int}(), Float64[], Float64[], Float64[], access_cnts, ks)
+    thres = planner.sol.overtime_warning_threshold
+    planner.sol.overtime_warning_threshold = Inf
+    build_tree(planner, initialstate(pomdp)) # For the preallocation of memory
+    planner.sol.overtime_warning_threshold = thres
+    return planner
 end
 
 include("bounds.jl")
