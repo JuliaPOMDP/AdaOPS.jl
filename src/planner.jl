@@ -11,12 +11,12 @@ function build_tree(p::AdaOPSPlanner, b_0)
         trial += 1
     end
     if (CPUtime_us()-start)*1e-6 > p.sol.T_max*p.sol.overtime_warning_threshold
-        @warn ```Surpass the time limit. The actual runtime is $((CPUtime_us()-start)*1e-6)s\n
-                 delta=$(p.sol.delta)\t
-                 zeta=$(p.sol.zeta)\t
-                 m_init=$(p.sol.m_init)\t
-                 sigma=$(p.sol.sigma)\t
-                 grid=$(typeof(p.sol.grid))\n
+        @warn ```Surpass the time limit. The actual runtime is $((CPUtime_us()-start)*1e-6)s 
+                 delta=$(p.sol.delta) 
+                 zeta=$(p.sol.zeta) 
+                 m_init=$(p.sol.m_init) 
+                 sigma=$(p.sol.sigma) 
+                 grid=$(typeof(p.sol.grid)) 
                  bounds=$(typeof(p.sol.bounds))
                  ```
     end

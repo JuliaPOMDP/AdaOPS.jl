@@ -176,8 +176,14 @@ struct SemiPORollout
     solver::Union{POMDPs.Solver, POMDPs.Policy}
 end
 
-struct SolvedSemiPORollout{P<:POMDPs.Policy, RNG<:AbstractRNG}
+mutable struct SolvedSemiPORollout{P<:POMDPs.Policy, S, O, RNG<:AbstractRNG}
     policy::P
+    inner_ind::Int
+    leaf_ind::Int
+    obs_ind_dict::Vector{Dict{O, Int}}
+    states::Vector{Vector{S}}
+    weights::Vector{Vector{Float64}}
+    probs::Vector{Vector{Float64}}
     rng::RNG
 end
 
@@ -205,13 +211,17 @@ function bound(bd::SolvedPORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dic
     return bound_dict
 end
 
-bound(bd::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, max_depth::Int) = estimate_value(bd, pomdp, b, max_depth-b.depth)
+function bound(bd::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, max_depth::Int)
+    bd.inner_ind = 0
+    bd.leaf_ind = 0
+    estimate_value(bd, pomdp, b, max_depth-b.depth)
+end
 
 function bound(bd::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
     bound_dict = Dict{O, Float64}()
     for (o, w) in wdict
         switch_to_sibling!(b, o, w)
-        bound_dict[o] = estimate_value(bd, pomdp, b, max_depth-b.depth)
+        bound_dict[o] = bound(bd, pomdp, b, max_depth)
     end
     return bound_dict
 end
@@ -250,7 +260,9 @@ end
 
 function convert_estimator(est::SemiPORollout, solver::AdaOPSSolver, pomdp)
     policy = MCTS.convert_to_policy(est.solver, pomdp)
-    SolvedSemiPORollout(policy, solver.rng)
+    O = obstype(pomdp)
+    S = statetype(pomdp)
+    SolvedSemiPORollout(policy, 0, 0, Dict{O, Int}[], Vector{S}[], Vector{Float64}[], Vector{Float64}[], solver.rng)
 end
 
 # Estimate the value of state with estimator
@@ -291,13 +303,20 @@ function estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, st
     if steps <= 0 || weight_sum(b) == 0.0
         return 0.0
     end
+    est.inner_ind += 1
     S = statetype(pomdp)
     O = obstype(pomdp)
-    obs_ind_dict = Dict{O, Int}()
-    states = Array{S,1}[]
-    weights = Array{Float64,1}[]
-    probs = Float64[]
+    if length(est.probs) < est.inner_ind
+        push!(est.obs_ind_dict, Dict{O, Int}())
+        push!(est.probs, Float64[])
+    end
+    obs_ind_dict = est.obs_ind_dict[est.inner_ind]
+    probs = est.probs[est.inner_ind]
+    empty!(obs_ind_dict)
+    empty!(probs)
 
+    states = Vector{S}[]
+    weights = Vector{Float64}[]
 
     a = action(est.policy, b)
 
@@ -306,17 +325,24 @@ function estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, st
         if !isterminal(pomdp, s)
             sp, o, r = @gen(:sp, :o, :r)(pomdp, s, a, est.rng)
 
-            if haskey(obs_ind_dict, o)
-                obs_ind = obs_ind_dict[o]
-                push!(states[obs_ind], sp)
-                push!(weights[obs_ind], weight(b, k) * obs_weight(pomdp, s, a, sp, o))
-                probs[obs_ind] += weight(b, k)
-            else
-                push!(states, [sp])
-                push!(weights, [weight(b, k) * obs_weight(pomdp, s, a, sp, o)])
-                push!(probs, weight(b, k))
+            if !haskey(obs_ind_dict, o)
+                push!(probs, 0.0)
                 obs_ind_dict[o] = length(probs)
+                est.leaf_ind += 1
+                if length(est.states) < est.leaf_ind
+                    push!(est.states, Array{S,1}[])
+                    push!(est.weights, Array{Float64,1}[])
+                else
+                    empty!(est.states[est.leaf_ind])
+                    empty!(est.weights[est.leaf_ind])
+                end
+                push!(states, est.states[est.leaf_ind])
+                push!(weights, est.weights[est.leaf_ind])
             end
+            obs_ind = obs_ind_dict[o]
+            push!(states[obs_ind], sp)
+            push!(weights[obs_ind], weight(b, k) * obs_weight(pomdp, s, a, sp, o))
+            probs[obs_ind] += weight(b, k)
 
             r_sum += r * weight(b, k)
         end
