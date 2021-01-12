@@ -15,7 +15,16 @@ WPFBelief(particles::Array, weights::Array{Float64,1}, weight_sum::Number, belie
 WPFBelief(particles::Array, weights::Array{Float64,1}, belief::Union{Int,Nothing}, depth::Int) = WPFBelief(particles, weights, belief, depth, nothing, nothing) 
 WPFBelief(particles::Array, weights::Array{Float64,1}, obs; depth::Int = 0) = WPFBelief(particles, weights, nothing, depth, nothing, obs)
 
-ParticleFilters.rand(rng::R, b::WPFBelief) where R<:AbstractRNG = rand(rng, b.particles)
+function ParticleFilters.rand(rng::AbstractRNG, b::WPFBelief)
+    t = rand(rng) * b.weight_sum
+    i = 1
+    cum_weight = b.weights[1]
+    while cum_weight < t
+        i += 1
+        cum_weight += b.weights[i]
+    end
+    return b.particles[i]
+end
 
 ParticleFilters.particles(b::WPFBelief) = b.particles
 ParticleFilters.n_particles(b::WPFBelief) = length(b.particles)
@@ -24,7 +33,13 @@ ParticleFilters.particle(b::WPFBelief, i::Int) = b.particles[i]
 ParticleFilters.weight_sum(b::WPFBelief) = b.weight_sum
 ParticleFilters.weights(b::WPFBelief) = b.weights
 ParticleFilters.weighted_particles(b::WPFBelief) = (b.particles[i]=>b.weights[i] for i in 1:length(b.weights))
-POMDPs.mean(b::WPFBelief) = dot(b.weights, b.particles)/weight_sum(b)
+function POMDPs.mean(b::WPFBelief)
+    mean_s = zero(eltype(particles(b)))
+    for (w, s) in weighted_particles(b)
+        mean_s .+= w .* s
+    end
+    return mean_s ./ weight_sum(b)
+end
 POMDPs.currentobs(b::WPFBelief) = b._obs
 @deprecate previous_obs POMDPs.currentobs
 
