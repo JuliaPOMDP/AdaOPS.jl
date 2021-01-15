@@ -164,6 +164,24 @@ function bounds(bds::IndependentBounds, pomdp::POMDP, b::WPFBelief, wdict::Dict{
     return bound_dict
 end
 
+struct SolvedFOValue{P<:POMDPs.Policy}
+    policy::P
+    values::Vector{Float64}
+end
+
+struct SolvedFORollout{P<:POMDPs.Policy, RNG<:AbstractRNG}
+    policy::P
+    values::Vector{Float64}
+    rng::RNG
+end
+
+struct SolvedPORollout{P<:POMDPs.Policy, U<:POMDPs.Updater, RNG<:AbstractRNG}
+    policy::P
+    values::Vector{Float64}
+    updater::U
+    rng::RNG
+end
+
 struct POValue
     solver::Union{POMDPs.Solver, POMDPs.Policy}
 end
@@ -187,26 +205,43 @@ mutable struct SolvedSemiPORollout{P<:POMDPs.Policy, S, O, RNG<:AbstractRNG}
     rng::RNG
 end
 
-function bound(bd::Union{SolvedFORollout, SolvedPORollout}, pomdp::POMDP, b::WPFBelief, max_depth::Int)
-    values = Float64[estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
-    return dot(b.weights, values)/b.weight_sum
+function bound(bd::SolvedFORollout, pomdp::POMDP, b::WPFBelief, max_depth::Int)
+    resize!(bd.values, n_particles(b))
+    for (i, s) in enumerate(particles(b))
+        bd.values[i] = estimate_value(bd, pomdp, s, b, max_depth-b.depth)
+    end
+    return dot(b.weights, bd.values)/b.weight_sum
 end
 
 function bound(bd::SolvedFORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
-    values = Float64[estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
+    resize!(bd.values, n_particles(b))
+    for (i, s) in enumerate(particles(b))
+        bd.values[i] = estimate_value(bd, pomdp, s, b, max_depth-b.depth)
+    end
     bound_dict = Dict{O, Float64}()
     for (o, w) in wdict
-        bound_dict[o] = dot(w, values)/sum(w)
+        bound_dict[o] = dot(w, bd.values)/sum(w)
     end
     return bound_dict
 end
 
+function bound(bd::SolvedPORollout, pomdp::POMDP, b::WPFBelief, max_depth::Int)
+    resize!(bd.values, n_particles(b))
+    for (i, s) in enumerate(particles(b))
+        bd.values[i] = estimate_value(bd, pomdp, s, b, max_depth-b.depth)
+    end
+    return dot(b.weights, bd.values)/b.weight_sum
+end
+
 function bound(bd::SolvedPORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
+    resize!(bd.values, n_particles(b))
     bound_dict = Dict{O, Float64}()
     for (o, w) in wdict
         switch_to_sibling!(b, o, w)
-        values = Float64[estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
-        bound_dict[o] = dot(w, values)/sum(w)
+        for (i, s) in enumerate(particles(b))
+            bd.values[i] = estimate_value(bd, pomdp, s, b, max_depth-b.depth)
+        end
+        bound_dict[o] = dot(w, bd.values)/sum(w)
     end
     return bound_dict
 end
@@ -227,13 +262,19 @@ function bound(bd::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict:
 end
 
 function bound(bd::SolvedFOValue, pomdp::POMDP, b::WPFBelief, max_depth::Int)
-    values = Float64[value(bd.policy, s) for s in particles(b)]
-    return dot(b.weights, values)/b.weight_sum
+    resize!(bd.values, n_particles(b))
+    for (i, s) in enumerate(particles(b))
+        bd.values[i] = value(bd.policy, s)
+    end
+    return dot(b.weights, bd.values)/b.weight_sum
 end
 
 function bound(bd::SolvedFOValue, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where O
-    values = Float64[value(bd.policy, s) for s in particles(b)]
-    return Dict(o=>(dot(w, values)/sum(w)) for (o, w) in wdict)
+    resize!(bd.values, n_particles(b))
+    for (i, s) in enumerate(particles(b))
+        bd.values[i] = value(bd.policy, s)
+    end
+    return Dict(o=>(dot(w, bd.values)/sum(w)) for (o, w) in wdict)
 end
 
 bound(bd::SolvedPOValue, pomdp::POMDP, b::WPFBelief, max_depth::Int) = value(bd.policy, b)
@@ -248,14 +289,31 @@ function bound(bd::SolvedPOValue, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Arr
 end
 
 # Convert an unsolved estimator to solved estimator
+convert_estimator(ev, solver, mdp) = ev
+
 function convert_estimator(est::FOValue, solver::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, UnderlyingMDP(pomdp))
-    SolvedFOValue(policy)
+    SolvedFOValue(policy, Float64[])
+end
+
+function convert_estimator(est::FORollout, solver::AdaOPSSolver, pomdp::POMDP)
+    policy = MCTS.convert_to_policy(est.solver, UnderlyingMDP(pomdp))
+    SolvedFORollout(policy, Float64[], solver.rng)
 end
 
 function convert_estimator(est::POValue, solver::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, pomdp)
     SolvedPOValue(policy)
+end
+
+function convert_estimator(est::PORollout, solver::AdaOPSSolver, pomdp::POMDP)
+    policy = MCTS.convert_to_policy(est.solver, pomdp)
+    SolvedPORollout(policy, Float64[], est.updater, solver.rng)
+end
+
+function convert_estimator(est::RolloutEstimator, solver::AdaOPSSolver, pomdp::POMDP)
+    policy = MCTS.convert_to_policy(est.solver, pomdp)
+    SolvedPORollout(policy, Float64[], updater(policy), solver.rng)
 end
 
 function convert_estimator(est::SemiPORollout, solver::AdaOPSSolver, pomdp)

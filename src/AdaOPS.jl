@@ -16,9 +16,8 @@ using LinearAlgebra
 using Distributions
 
 using MCTS
-import MCTS: convert_estimator, convert_to_policy
+import MCTS: convert_to_policy
 using BasicPOMCP
-import BasicPOMCP: SolvedFORollout, SolvedPORollout, SolvedFOValue, convert_estimator
 
 import Random.rand
 
