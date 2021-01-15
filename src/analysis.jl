@@ -88,7 +88,7 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     likelihood_sums = p.likelihood_sums
     likelihood_square_sums = p.likelihood_square_sums
 
-    belief = get_belief(D, b)
+    belief = WPFBelief(D.ba_particles[D.parent[b]], D.weights[b], b, D.Delta[b], D, D.obs[b])
 
     m_min = p.sol.m_init
     m_max = n_particles(belief)
@@ -321,7 +321,11 @@ function expand_with_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     m_min = p.sol.m_init
     m_max = ceil(Int, p.sol.m_init * p.sol.sigma)
 
-    belief = get_belief(D, b)
+    if b == 1
+        belief = D.root_belief
+    else
+        belief = WPFBelief(D.ba_particles[D.parent[b]], D.weights[b], b, D.Delta[b], D, D.obs[b])
+    end
     resample!(resampled, belief, p.rng)
 
     acts = actions(p.pomdp, belief)

@@ -36,9 +36,9 @@ ParticleFilters.weighted_particles(b::WPFBelief) = (b.particles[i]=>b.weights[i]
 function POMDPs.mean(b::WPFBelief)
     mean_s = zero(eltype(particles(b)))
     for (w, s) in weighted_particles(b)
-        mean_s .+= w .* s
+        mean_s += w * s
     end
-    return mean_s ./ weight_sum(b)
+    return mean_s / weight_sum(b)
 end
 POMDPs.currentobs(b::WPFBelief) = b._obs
 @deprecate previous_obs POMDPs.currentobs

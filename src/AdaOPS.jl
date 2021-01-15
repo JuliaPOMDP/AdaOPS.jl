@@ -131,13 +131,13 @@ Further information can be found in the field docstrings (e.g.
     rng::R                                  = MersenneTwister(rand(UInt32))
 
     "If true, sanity checks on the provided bounds are performed."
-    bounds_warnings::Bool                   = true
+    bounds_warnings::Bool                   = false
 
     "If true, a reprenstation of the constructed DESPOT is returned by POMDPModelTools.action_info."
     tree_in_info::Bool                      = false
 
     "Issue an warning when the planning time surpass the time limit by `over_time_warning_threshold` times"
-    overtime_warning_threshold::Float64     = 1.5
+    overtime_warning_threshold::Float64     = 2.0
 end
 
 mutable struct AdaOPSTree{S,A,O}
