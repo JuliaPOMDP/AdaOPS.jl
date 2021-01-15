@@ -25,7 +25,7 @@ bound(n::Number, pomdp::POMDP, b::WPFBelief, max_depth::Int) = convert(Float64, 
 
 function bound(n::Number, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
     u = bound(n, pomdp, b, max_depth)
-    Dict([o=>u for (o,w) in wdict])
+    Dict(o=>u for (o,w) in wdict)
 end
 
 # Used when both lower and upper bounds are fixed numbers
@@ -188,12 +188,12 @@ mutable struct SolvedSemiPORollout{P<:POMDPs.Policy, S, O, RNG<:AbstractRNG}
 end
 
 function bound(bd::Union{SolvedFORollout, SolvedPORollout}, pomdp::POMDP, b::WPFBelief, max_depth::Int)
-    values = [estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
+    values = Float64[estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
     return dot(b.weights, values)/b.weight_sum
 end
 
 function bound(bd::SolvedFORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
-    values = [estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
+    values = Float64[estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
     bound_dict = Dict{O, Float64}()
     for (o, w) in wdict
         bound_dict[o] = dot(w, values)/sum(w)
@@ -205,7 +205,7 @@ function bound(bd::SolvedPORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dic
     bound_dict = Dict{O, Float64}()
     for (o, w) in wdict
         switch_to_sibling!(b, o, w)
-        values = [estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
+        values = Float64[estimate_value(bd, pomdp, s, b, max_depth-b.depth) for s in particles(b)]
         bound_dict[o] = dot(w, values)/sum(w)
     end
     return bound_dict
@@ -227,13 +227,13 @@ function bound(bd::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict:
 end
 
 function bound(bd::SolvedFOValue, pomdp::POMDP, b::WPFBelief, max_depth::Int)
-    values = [value(bd.policy, s) for s in particles(b)]
+    values = Float64[value(bd.policy, s) for s in particles(b)]
     return dot(b.weights, values)/b.weight_sum
 end
 
 function bound(bd::SolvedFOValue, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where O
-    values = [value(bd.policy, s) for s in particles(b)]
-    return Dict([o=>(dot(w, values)/sum(w)) for (o, w) in wdict])
+    values = Float64[value(bd.policy, s) for s in particles(b)]
+    return Dict(o=>(dot(w, values)/sum(w)) for (o, w) in wdict)
 end
 
 bound(bd::SolvedPOValue, pomdp::POMDP, b::WPFBelief, max_depth::Int) = value(bd.policy, b)
