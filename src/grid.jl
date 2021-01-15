@@ -23,7 +23,7 @@ length(grid::StateGrid) = Base.length(grid.cutPoints)
 zeros_like(grid::StateGrid) = zeros(Int, [length(points)+1 for points in grid.cutPoints]...)
 
 function access(grid::StateGrid, access_cnt::Array, s, pomdp::POMDP)
-    s = grid.convert(s, pomdp)
+    s = grid.convert(s, pomdp)::AbstractVector
     ind = zeros(Int64, length(grid.cutPoints))
     for d in 1:length(grid.cutPoints)
         cutPoints = grid.cutPoints[d]

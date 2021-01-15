@@ -181,17 +181,18 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             end
         end
 
-        for (i, s) in enumerate(belief.particles[curr_particle_num+1:m_max])
+        for i in (curr_particle_num+1):m_max
+            s = belief.particles[i]
             if isterminal(p.pomdp, s)
-                all_states[curr_particle_num+i] = missing
+                all_states[i] = missing
             else
                 sp, o, r = @gen(:sp, :o, :r)(p.pomdp, s, a, p.rng)
                 Rsum += weight(belief, i) * r
-                all_states[curr_particle_num+i] = sp
+                all_states[i] = sp
                 push!(next_states, sp)
                 for (o, w) in wdict
                     # likelihood = obs_weight(p.pomdp, s, a, sp, o)
-                    likelihood = weight(belief, curr_particle_num+i) * pdf(observation(p.pomdp, a, sp), o)
+                    likelihood = weight(belief, i) * pdf(observation(p.pomdp, a, sp), o)
                     push!(w, likelihood)
                     obs_ind = obs_ind_dict[o]
                     likelihood_sums[obs_ind] += likelihood
@@ -229,7 +230,7 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         end
                     end
                     if !haskey(wdict, o)
-                        for j in (m_for_packing+1):(curr_particle_num+i)
+                        for j in (m_for_packing+1):i
                             if all_states[j] !== missing
                                 # likelihood = obs_weight(p.pomdp, resampled[j], a, all_states[j], o)
                                 likelihood = weight(belief, j) * pdf(observation(p.pomdp, a, all_states[j]), o)
@@ -247,7 +248,7 @@ function expand_without_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     end
                 end
                 obs_ind = obs_ind_dict[o]
-                freqs[obs_ind] += weight(belief, curr_particle_num+i)
+                freqs[obs_ind] += weight(belief, i)
             end
         end
 
@@ -429,7 +430,7 @@ function expand_with_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             curr_particle_num = m
             ESS = likelihood_sums .* likelihood_sums ./ likelihood_square_sums
             if p.sol.grid !== nothing
-                MESS = ks .|> x->p.sol.MESS(x, p.sol.zeta)
+                MESS = [p.sol.MESS(k, p.sol.zeta) for k in ks]
             else
                 MESS = m_max
             end
@@ -438,13 +439,14 @@ function expand_with_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                 break
             end
 
-            for (i, s) in enumerate(resampled[curr_particle_num+1:m])
+            for i in (curr_particle_num+1):m
+                s = resampled[i]
                 if isterminal(p.pomdp, s)
-                    all_states[curr_particle_num+i] = missing
+                    all_states[i] = missing
                 else
                     sp, o, r = @gen(:sp, :o, :r)(p.pomdp, s, a, p.rng)
                     Rsum += r
-                    all_states[curr_particle_num+i] = sp
+                    all_states[i] = sp
                     push!(next_states, sp)
                     for (o, w) in wdict
                         # likelihood = obs_weight(p.pomdp, s, a, sp, o)
@@ -483,7 +485,7 @@ function expand_with_resample_test!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                             end
                         end
                         if !haskey(wdict, o)
-                            for j in (m_for_packing+1):(curr_particle_num+i)
+                            for j in (m_for_packing+1):i
                                 if all_states[j] !== missing
                                     # likelihood = obs_weight(p.pomdp, resampled[j], a, all_states[j], o)
                                     likelihood = pdf(observation(p.pomdp, a, all_states[j]), o)

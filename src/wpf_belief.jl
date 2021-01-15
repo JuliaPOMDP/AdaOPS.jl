@@ -9,11 +9,11 @@ mutable struct WPFBelief{S, O} <: AbstractParticleBelief{S}
     _probs::Union{Nothing, Dict{S,Float64}}
     _hist::Union{Nothing, Array{NamedTuple,1}}
 end
-WPFBelief(particles::Array, weights::Array{Float64,1}, weight_sum::Number, belief::Union{Int,Nothing}, depth::Int, tree, obs) = WPFBelief(particles, weights, convert(Float64, weight_sum), belief, depth, tree, obs, nothing, nothing)
-WPFBelief(particles::Array, weights::Array{Float64,1}, belief::Union{Int,Nothing}, depth::Int, tree, obs) = WPFBelief(particles, weights, sum(weights), belief, depth, tree, obs, nothing, nothing)
-WPFBelief(particles::Array, weights::Array{Float64,1}, weight_sum::Number, belief::Union{Int,Nothing}, depth::Int) = WPFBelief(particles, weights, weight_sum, belief, depth, nothing, nothing) 
-WPFBelief(particles::Array, weights::Array{Float64,1}, belief::Union{Int,Nothing}, depth::Int) = WPFBelief(particles, weights, belief, depth, nothing, nothing) 
-WPFBelief(particles::Array, weights::Array{Float64,1}, obs; depth::Int = 0) = WPFBelief(particles, weights, nothing, depth, nothing, obs)
+WPFBelief(particles::Vector{S}, weights::Vector{Float64}, weight_sum::Number, belief::Union{Int,Nothing}, depth::Int, tree, obs::O) where S where O = WPFBelief(particles, weights, convert(Float64, weight_sum), belief, depth, tree, obs, nothing, nothing)
+WPFBelief(particles::Vector{S}, weights::Vector{Float64}, belief::Union{Int,Nothing}, depth::Int, tree, obs::O) where S where O = WPFBelief(particles, weights, sum(weights), belief, depth, tree, obs, nothing, nothing)
+WPFBelief(particles::Vector{S}, weights::Vector{Float64}, weight_sum::Number, belief::Union{Int,Nothing}, depth::Int) where S = WPFBelief(particles, weights, weight_sum, belief, depth, nothing, nothing) 
+WPFBelief(particles::Vector{S}, weights::Vector{Float64}, belief::Union{Int,Nothing}, depth::Int) where S = WPFBelief(particles, weights, belief, depth, nothing, nothing) 
+WPFBelief(particles::Vector{S}, weights::Vector{Float64}, obs::O; depth::Int = 0) where S where O = WPFBelief(particles, weights, nothing, depth, nothing, obs)
 
 function ParticleFilters.rand(rng::AbstractRNG, b::WPFBelief)
     t = rand(rng) * b.weight_sum
