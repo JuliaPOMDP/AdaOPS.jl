@@ -144,7 +144,6 @@ mutable struct AdaOPSTree{S,A,O}
     children::Vector{Vector{Int}} # to children *ba nodes*
     parent::Vector{Int} # maps to the parent *ba node*
     Delta::Vector{Int}
-    k::Vector{Int}
     u::Vector{Float64}
     l::Vector{Float64}
     obs::Vector{O}
@@ -180,8 +179,7 @@ struct AdaOPSPlanner{P<:POMDP, B, RNG<:AbstractRNG, S, O} <: Policy
     freqs::Vector{Float64}
     likelihood_sums::Vector{Float64}
     likelihood_square_sums::Vector{Float64}
-    access_cnts::Union{Array, Nothing}
-    ks::Union{Vector{Int}, Nothing}
+    access_cnt::Array{Int}
 end
 
 function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
@@ -195,7 +193,6 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
 
     tree = AdaOPSTree{S,A,O}([Float64[]],
                          [Int[]],
-                         [0],
                          [0],
                          [0],
                          [Inf],
@@ -219,16 +216,14 @@ function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
 
     m_max = ceil(Int, sol.sigma * sol.m_init)
     if sol.grid !== nothing
-        access_cnts = [zeros_like(sol.grid) for i in 1:m_max]
-        ks = Int[] # track the dispersion of child beliefs
+        access_cnt = zeros_like(sol.grid)
     else
-        access_cnts = nothing
-        ks = nothing
+        access_cnt = Int[]
     end
     norm_w = [Vector{Float64}(undef, sol.m_init) for i in 1:m_max]
     planner = AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, tree, Vector{S}(undef, m_max),
                         Vector{Union{S,Missing}}(undef, m_max), Dict{O, Vector{Float64}}(), norm_w,
-                        Dict{O, Int}(), Float64[], Float64[], Float64[], access_cnts, ks)
+                        Dict{O, Int}(), Float64[], Float64[], Float64[], access_cnt)
     thres = planner.sol.overtime_warning_threshold
     planner.sol.overtime_warning_threshold = Inf
     build_tree(planner, initialstate(pomdp)) # For the preallocation of memory

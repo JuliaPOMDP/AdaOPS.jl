@@ -8,9 +8,6 @@ function AdaOPSTree(p::AdaOPSPlanner, b_0)
     tree.ba_len = 0
 
     empty!(tree.children[1])
-    if p.sol.grid !== nothing
-        tree.k[1] = 2
-    end
     tree.u[1] = 10000.0 # Should be at least V_max but not to big for numerical reasons
     tree.l[1] = 0.0
     tree.root_belief = b_0
@@ -264,8 +261,7 @@ function expand_with_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     likelihood_square_sums = p.likelihood_square_sums
 
     if p.sol.grid !== nothing
-        access_cnts = p.access_cnts # store the access_count grid for each observation branch
-        ks = p.ks # track the dispersion of child beliefs
+        access_cnt = p.access_cnt # for tracking accessed tiles
     end
 
     m_min = p.sol.m_init
@@ -286,10 +282,8 @@ function expand_with_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         empty!(wdict)
         empty!(freqs)
         empty!(obs_ind_dict)
-        if p.sol.grid !== nothing
-            empty!(ks)
-        end
 
+        k = 0 # track the dispersion of the target distribution
         ba += 1
         Rsum = 0.0
         next_states = D.ba_particles[ba]
@@ -315,13 +309,9 @@ function expand_with_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                     push!(freqs, 1)
                     obs_ind_dict[o] = length(freqs)
                     obs_ind = obs_ind_dict[o]
-                    if p.sol.grid !== nothing
-                        fill!(access_cnts[obs_ind], 0)
-                        push!(ks, 0)
-                    end
                 end
-                if p.sol.grid !== nothing && access(p.sol.grid, access_cnts[obs_ind], sp, p.pomdp)
-                    ks[obs_ind] += 1
+                if p.sol.grid !== nothing && access(p.sol.grid, access_cnt, sp, p.pomdp)
+                    k += 1
                 end
             end
         end
@@ -359,10 +349,6 @@ function expand_with_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                         freqs[new_obs_ind] += freqs[obs_ind]
                         obs_ind_dict[o] = new_obs_ind
                         o = o′
-                        if p.sol.grid !== nothing
-                            access_cnts[new_obs_ind] += access_cnts[obs_ind]
-                            ks[new_obs_ind] = count(x->x>0, access_cnts[new_obs_ind])
-                        end
                         break
                     end
                 end
@@ -379,7 +365,7 @@ function expand_with_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             curr_particle_num = m
             ESS = likelihood_sums .* likelihood_sums ./ likelihood_square_sums
             if p.sol.grid !== nothing
-                MESS = [p.sol.MESS(k, p.sol.zeta) for k in ks]
+                MESS = p.sol.MESS(k, p.sol.zeta)
             else
                 MESS = m_max
             end
@@ -448,17 +434,13 @@ function expand_with_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
                             push!(likelihood_square_sums, likelihood_square_sum)
                             wdict[o] = w
                             obs_ind_dict[o] = obs_ind
-                            if p.sol.grid !== nothing
-                                fill!(access_cnts[obs_ind], 0)
-                                push!(ks, 0)
-                            end
                             bp += 1
                         end
                     end
                     obs_ind = obs_ind_dict[o]
                     freqs[obs_ind] += 1
-                    if p.sol.grid !== nothing && access(p.sol.grid, access_cnts[obs_ind], sp, p.pomdp)
-                        ks[obs_ind] += 1
+                    if p.sol.grid !== nothing && access(p.sol.grid, access_cnt, sp, p.pomdp)
+                        k += 1
                     end
                 end
             end
@@ -488,9 +470,6 @@ function expand_with_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
             D.obs_prob[bp] = freqs[obs_ind] / curr_particle_num
             D.Deff[bp] = curr_particle_num/ESS[obs_ind]
             D.l[bp], D.u[bp] = bounds_dict[o]
-            if p.sol.grid !== nothing
-                D.k[bp] = ks[obs_ind]
-            end
         end
         D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
         D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
@@ -507,7 +486,6 @@ function resize_b!(D::AdaOPSTree, n::Int)
         resize!(D.weights, n)
         resize!(D.parent, n)
         resize!(D.Delta, n)
-        resize!(D.k, n)
         resize!(D.u, n)
         resize!(D.l, n)
         resize!(D.obs, n)
