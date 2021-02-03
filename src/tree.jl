@@ -1,509 +1,260 @@
-function AdaOPSTree(p::AdaOPSPlanner, b_0)
-    S = statetype(p.pomdp)
-    A = actiontype(p.pomdp)
-    O = obstype(p.pomdp)
+function AdaOPSTree(p::AdaOPSPlanner{S,A,O,M}, b0::RB, num_b::Int = 50_000) where {S,A,O,M<:POMDP{S,A,O},RB}
+    num_a = length(actions(p.pomdp))
+    num_ba = div(num_b, num_a)
 
-    tree = p.tree
-    tree.b_len = 1
-    tree.ba_len = 0
+    return AdaOPSTree(sizehint!([Float64[]], num_b),
+                    sizehint!([Int[]], num_b),
+                    sizehint!([0], num_b),
+                    sizehint!([0], num_b),
+                    sizehint!([10000.0], num_b),
+                    sizehint!([-10000.0], num_b),
+                    sizehint!(Vector{O}(undef, 1), num_b),
+                    sizehint!([1.0], num_b),
 
-    empty!(tree.children[1])
-    tree.u[1] = 10000.0 # Should be at least V_max but not to big for numerical reasons
-    tree.l[1] = 0.0
-    tree.root_belief = b_0
+                    sizehint!(Vector{S}[], num_ba),
+                    sizehint!(Vector{Int}[], num_ba),
+                    sizehint!(Int[], num_ba),
+                    sizehint!(Float64[], num_ba),
+                    sizehint!(Float64[], num_ba),
+                    sizehint!(Float64[], num_ba),
+                    sizehint!(A[], num_ba),
 
-    return tree::AdaOPSTree{S,A,O}
+                    b0,
+                    1,
+                    0
+                 )
 end
 
-function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    if D.Deff[b] > p.sol.Deff_thres
-        expand_with_resample!(D, b, p)
-    else
-        expand_without_resample!(D, b, p)
+function expand!(D::AdaOPSTree{S,A,O,RB}, b::Int, p::AdaOPSPlanner{S,A,O,M}) where {S,A,O,M<:POMDP{S,A,O},RB}
+    belief, resampled = get_belief(D, b, p)
+    if weight_sum(belief) === 0.0
+        return -D.l[b], -D.u[b]
     end
-end
 
-function expand_without_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    S = statetype(p.pomdp)
-    A = actiontype(p.pomdp)
-    O = obstype(p.pomdp)
-
-    all_states = p.all_states # all states generated (may have duplicates)
-    wdict = p.wdict # weights of child beliefs
-    norm_w = p.norm_w # normalized weights for computing distances
-    obs_ind_dict = p.obs_ind_dict # the index of observation branches
-    freqs = p.freqs # frequency of observations
-
-    # store the likelihood sum and likelihood square sum for convenience of ESS computation
-    likelihood_sums = p.likelihood_sums
-    likelihood_square_sums = p.likelihood_square_sums
-
-    belief = WPFBelief(D.ba_particles[D.parent[b]], D.weights[b], b, D.Delta[b], D, D.obs[b])
-
-    m_min = p.sol.m_init
-    m_max = n_particles(belief)
-
+    m_max = ceil(Int, p.sol.sigma * p.sol.m_init)
     acts = actions(p.pomdp, belief)
-    resize_ba!(D, D.ba_len + length(acts))
-    ba = D.ba_len
-
+    num_a = length(acts)
+    resize_ba!(D, D.ba + num_a, m_max)
+    resize_b!(D, D.b + m_max * num_a, m_max, num_a)
     for a in acts
-        empty!(wdict)
-        empty!(freqs)
-        empty!(obs_ind_dict)
+        empty_buffer!(p)
+        P, Rsum = propagate_particles(D, belief, a, resampled, p)
+        gen_packing!(D, P, belief, a, p)
 
-        Rsum = 0.0
-        next_states = D.ba_particles[ba+1]
-        empty!(next_states)
-        curr_particle_num = 0
-        nonterminal = 0
+        D.ba += 1 # increase ba count
+        m_max = length(P) # number of particles used
+        n_obs = length(p.w) # number of new obs
+        fbp = D.b + 1 # first bp
+        lbp = D.b + n_obs # last bp
+        w_sum = sum(weights(belief)[1:m_max]) # calculate the weight sum of particles used
 
-        # generate a initial packing
-        while nonterminal < m_min && curr_particle_num < m_max
-            curr_particle_num += 1
-            if isterminal(p.pomdp, belief.particles[curr_particle_num])
-                all_states[curr_particle_num] = missing
-            else
-                nonterminal += 1
-                sp, o, r = @gen(:sp, :o, :r)(p.pomdp, belief.particles[curr_particle_num], a, p.rng)
-                Rsum += weight(belief, curr_particle_num) * r
-                all_states[curr_particle_num] = sp
-                push!(next_states, sp)
-                if haskey(obs_ind_dict, o)
-                    freqs[obs_ind_dict[o]] += weight(belief, curr_particle_num)
-                    obs_ind = obs_ind_dict[o]
-                else
-                    push!(freqs, weight(belief, curr_particle_num))
-                    obs_ind_dict[o] = length(freqs)
-                    obs_ind = obs_ind_dict[o]
-                end
-            end
-        end
-        if nonterminal == 0
-            return -D.u[b], -D.l[b]
-        end
+        # initialize the new action branch
+        resize!(D.ba_children[D.ba], n_obs)
+        D.ba_children[D.ba] .= fbp:lbp
+        D.ba_parent[D.ba] = b
+        D.ba_r[D.ba] = Rsum / w_sum
+        D.ba_action[D.ba] = a
+        push!(D.children[b], D.ba)
 
-        m_for_packing = curr_particle_num
-        m = curr_particle_num
+        # initialize bounds
+        D.b += n_obs
+        b′ = WPFBelief(P, first(p.w), 1.0, fbp, D.Delta[b] + 1, D, first(p.obs))
+        resize!(p.u, n_obs)
+        resize!(p.l, n_obs)
+        bounds!(p.l, p.u, p.bounds, p.pomdp, b′, p.w, p.obs, p.sol.D, p.sol.bounds_warnings)
 
-        # Initialize likelihood_sums and likelihood_square_sums such that the default ESS is Inf
-        resize!(likelihood_sums, length(freqs))
-        fill!(likelihood_sums, Inf)
-        resize!(likelihood_square_sums, length(freqs))
-        fill!(likelihood_square_sums, 1.0)
+        # initialize new obs branches
+        view(D.weights, fbp:lbp) .= p.w
+        view(D.parent, fbp:lbp) .= D.ba
+        view(D.Delta, fbp:lbp) .= D.Delta[b] + 1
+        view(D.obs, fbp:lbp) .= p.obs
+        view(D.obs_prob, fbp:lbp) .= p.obs_w ./ w_sum
+        view(D.l, fbp:lbp) .= p.l
+        view(D.u, fbp:lbp) .= p.u
 
-        bp = D.b_len
-        for (o, obs_ind) in obs_ind_dict
-            w = length(D.weights) > bp ? D.weights[bp+1] : Float64[]
-            empty!(w)
-            likelihood_sum = 0.0
-            likelihood_square_sum = 0.0
-            for j in 1:m
-                if all_states[j] !== missing
-                    # likelihood = obs_weight(p.pomdp, resampled[j], a, all_states[j], o)
-                    likelihood = weight(belief, j) * pdf(observation(p.pomdp, a, all_states[j]), o)
-                    likelihood_sum += likelihood
-                    likelihood_square_sum += likelihood * likelihood
-                    push!(w, likelihood)
-                end
-            end
-            if likelihood_sum == 0
-                continue
-            end
-            if p.sol.delta > 0.0
-                resize!(norm_w[obs_ind], length(w))
-                norm_w[obs_ind][:] = w ./ likelihood_sum
-                for (o′, w′) in wdict
-                    new_obs_ind = obs_ind_dict[o′]
-                    if norm(norm_w[obs_ind] - norm_w[new_obs_ind], 1) <= p.sol.delta
-                        freqs[new_obs_ind] += freqs[obs_ind]
-                        obs_ind_dict[o] = new_obs_ind
-                        o = o′
-                        break
-                    end
-                end
-            end
-            if !haskey(wdict, o)
-                likelihood_sums[obs_ind] = likelihood_sum
-                likelihood_square_sums[obs_ind] = likelihood_square_sum
-                wdict[o] = w
-                bp += 1
-            end
-        end
-
-        for i in (curr_particle_num+1):m_max
-            s = belief.particles[i]
-            if isterminal(p.pomdp, s)
-                all_states[i] = missing
-            else
-                sp, o, r = @gen(:sp, :o, :r)(p.pomdp, s, a, p.rng)
-                Rsum += weight(belief, i) * r
-                all_states[i] = sp
-                push!(next_states, sp)
-                for (o, w) in wdict
-                    # likelihood = obs_weight(p.pomdp, s, a, sp, o)
-                    likelihood = weight(belief, i) * pdf(observation(p.pomdp, a, sp), o)
-                    push!(w, likelihood)
-                    obs_ind = obs_ind_dict[o]
-                    likelihood_sums[obs_ind] += likelihood
-                    likelihood_square_sums[obs_ind] += likelihood * likelihood
-                end
-                if !haskey(obs_ind_dict, o)
-                    w = length(D.weights) > bp ? D.weights[bp+1] : Float64[]
-                    empty!(w)
-                    obs_ind = length(freqs) + 1
-                    likelihood_sum = 0.0
-                    likelihood_square_sum = 0.0
-                    for j in 1:m_for_packing
-                        if all_states[j] !== missing
-                            # likelihood = obs_weight(p.pomdp, resampled[j], a, all_states[j], o)
-                            likelihood = weight(belief, j) * pdf(observation(p.pomdp, a, all_states[j]), o)
-                            likelihood_sum += likelihood
-                            likelihood_square_sum += likelihood * likelihood
-                            push!(w, likelihood)
-                        end
-                    end
-                    if likelihood_sum == 0
-                        continue
-                    end
-                    if p.sol.delta > 0.0
-                        normalized_w = norm_w[obs_ind]
-                        resize!(normalized_w, length(first(norm_w)))
-                        normalized_w[:] = w[1:length(normalized_w)] ./ likelihood_sum
-                        for (o′, w′) in wdict
-                            new_obs_ind = obs_ind_dict[o′]
-                            if norm(normalized_w - norm_w[new_obs_ind], 1) <= p.sol.delta
-                                obs_ind_dict[o] = new_obs_ind
-                                o = o′
-                                break
-                            end
-                        end
-                    end
-                    if !haskey(wdict, o)
-                        for j in (m_for_packing+1):i
-                            if all_states[j] !== missing
-                                # likelihood = obs_weight(p.pomdp, resampled[j], a, all_states[j], o)
-                                likelihood = weight(belief, j) * pdf(observation(p.pomdp, a, all_states[j]), o)
-                                likelihood_sum += likelihood
-                                likelihood_square_sum += likelihood * likelihood
-                                push!(w, likelihood)
-                            end
-                        end
-                        push!(freqs, 0)
-                        push!(likelihood_sums, likelihood_sum)
-                        push!(likelihood_square_sums, likelihood_square_sum)
-                        wdict[o] = w
-                        obs_ind_dict[o] = obs_ind
-                        bp += 1
-                    end
-                end
-                obs_ind = obs_ind_dict[o]
-                freqs[obs_ind] += weight(belief, i)
-            end
-        end
-
-        if isempty(wdict)
-            continue
-        end
-        ba += 1
-
-        curr_particle_num = m_max
-
-        D.ba_children[ba] = [D.b_len+1:bp;]
-        D.ba_parent[ba] = b
-        D.ba_r[ba] = Rsum / weight_sum(belief)
-        D.ba_action[ba] = a
-        push!(D.children[b], ba)
-
-        nbp = bp - D.b_len
-        bp = D.b_len
-        D.b_len += nbp
-        resize_b!(D, D.b_len)
-        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, D.b_len, D.Delta[b] + 1, D, first(keys(wdict)))
-        bounds_dict = bounds(p.bounds, p.pomdp, wpf_belief, wdict, p.sol.bounds_warnings)
-        ESS = likelihood_sums .* likelihood_sums ./ likelihood_square_sums
-        for (o, w) in wdict
-            bp += 1
-            D.weights[bp] = w
-            empty!(D.children[bp])
-            D.parent[bp] = ba
-            D.Delta[bp] = D.Delta[b] + 1
-            D.obs[bp] = o
-            obs_ind = obs_ind_dict[o]
-            D.obs_prob[bp] = freqs[obs_ind] / weight_sum(belief)
-            D.Deff[bp] = curr_particle_num/ESS[obs_ind]
-            D.l[bp], D.u[bp] = bounds_dict[o]
-        end
-        D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
-        D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
+        # update upper and lower bounds for action selection
+        D.ba_l[D.ba] = D.ba_r[D.ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[D.ba])
+        D.ba_u[D.ba] = D.ba_r[D.ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[D.ba])
     end
-    if D.ba_len == ba
-        return -D.u[b], -D.l[b]
-    end
-    D.ba_len = ba
-    return maximum(D.ba_u[ba] for ba in D.children[b]) - D.u[b], maximum(D.ba_l[ba] for ba in D.children[b]) - D.l[b]
+    return maximum(D.ba_l[ba] for ba in D.children[b]) - D.l[b], maximum(D.ba_u[ba] for ba in D.children[b]) - D.u[b]
 end
 
-function expand_with_resample!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    S = statetype(p.pomdp)
-    A = actiontype(p.pomdp)
-    O = obstype(p.pomdp)
+function DesignEffect(D::AdaOPSTree, b::Int)
+    w = D.weights[b]
+    n = length(w)
+    ESS = (sum(w)^2)/(w'w)
+    return n/ESS
+end
 
-    all_states = p.all_states # all states generated (may have duplicates)
-    resampled = p.resampled # all states resampled
-    wdict = p.wdict # weights of child beliefs
-    norm_w = p.norm_w # normalized weights for computing distances
-    obs_ind_dict = p.obs_ind_dict # the index of observation branches
-    freqs = p.freqs # frequency of observations
-
-    # store the likelihood sum and likelihood square sum for convenience of ESS computation
-    likelihood_sums = p.likelihood_sums
-    likelihood_square_sums = p.likelihood_square_sums
-
-    if p.sol.grid !== nothing
-        access_cnt = p.access_cnt # for tracking accessed tiles
-    end
-
-    m_min = p.sol.m_init
-    m_max = ceil(Int, p.sol.m_init * p.sol.sigma)
-
-    if b == 1
-        belief = D.root_belief
+function get_belief(D::AdaOPSTree{S,A,O,RB}, b::Int, p::AdaOPSPlanner{S,A,O,M}) where {S,A,O,M<:POMDP{S,A,O},RB}
+    if b === 1
+        belief = resample!(p.resampled, D.root_belief, p.pomdp, p.rng)
+        resampled = true
     else
-        belief = WPFBelief(D.ba_particles[D.parent[b]], D.weights[b], b, D.Delta[b], D, D.obs[b])
-    end
-    resample!(resampled, belief, p.rng)
-
-    acts = actions(p.pomdp, belief)
-    resize_ba!(D, D.ba_len + length(acts))
-    ba = D.ba_len
-
-    for a in acts
-        empty!(wdict)
-        empty!(freqs)
-        empty!(obs_ind_dict)
-
-        k = 0 # track the dispersion of the target distribution
-        ba += 1
-        Rsum = 0.0
-        next_states = D.ba_particles[ba]
-        empty!(next_states)
-        curr_particle_num = 0
-        nonterminal = 0
-
-        # generate a initial packing
-        while nonterminal < m_min && curr_particle_num < m_max
-            curr_particle_num += 1
-            if isterminal(p.pomdp, resampled[curr_particle_num])
-                all_states[curr_particle_num] = missing
+        P = D.ba_particles[D.parent[b]]
+        W = D.weights[b]
+        w_sum = 0.0
+        @inbounds for i in eachindex(P)
+            if isterminal(p.pomdp, P[i])
+                W[i] = 0.0
             else
-                nonterminal += 1
-                sp, o, r = @gen(:sp, :o, :r)(p.pomdp, resampled[curr_particle_num], a, p.rng)
-                Rsum += r
-                all_states[curr_particle_num] = sp
-                push!(next_states, sp)
-                if haskey(obs_ind_dict, o)
-                    freqs[obs_ind_dict[o]] += 1
-                    obs_ind = obs_ind_dict[o]
+                w_sum += W[i]
+            end
+        end
+        if w_sum === 0.0
+            return WeightedParticleBelief(P, W, w_sum)::WeightedParticleBelief{S}, true
+        end
+        resampled = DesignEffect(D, b) > p.sol.Deff_thres
+        if resampled
+            belief = resample!(p.resampled, WeightedParticleBelief(P, W, w_sum), p.rng)
+        else
+            belief = WeightedParticleBelief(P, W, w_sum)
+        end
+    end
+    return belief::WeightedParticleBelief{S}, resampled::Bool
+end
+
+function empty_buffer!(p::AdaOPSPlanner{S,A,O,P,N}) where {S,A,O,P<:POMDP{S,A,O},N}
+    empty!(p.obs)
+    empty!(p.obs_ind_dict)
+    empty!(p.w)
+    fill!(p.access_cnt, 0)
+    empty!(p.obs_w)
+    empty!(p.u)
+    empty!(p.l)
+    return nothing
+end
+
+function gen_packing!(D::AdaOPSTree{S,A,O}, P::Vector{S}, belief::WeightedParticleBelief{S}, a::A, p::AdaOPSPlanner{S,A,O,M}) where {S,A,O,M<:POMDP{S,A,O}}
+    m_min = p.sol.m_init
+    m_max = length(P)
+    w = weights(belief)
+
+    next_obs = 1 # denote the index of the next observation branch
+    for i in eachindex(p.obs)
+        w′ = resize!(D.weights[D.b+next_obs], m_min)
+        o = p.obs[i]
+        # reweight first m_min particles
+        reweight!(w′, view(w, 1:m_min), view(P, 1:m_min), a, o, p.pomdp)
+        # check if the observation is already covered by the packing
+        norm_w = p.norm_w[next_obs]
+        norm_w .= w′ ./ sum(w′)
+        obs_ind = in_packing(norm_w, view(p.norm_w, 1:(next_obs-1)), p.sol.delta)
+        if obs_ind !== 0
+            # merge new obs into existing obs
+            p.obs_w[obs_ind] += p.obs_w[i]
+        else
+            # add new obs into the packing
+            p.obs_w[next_obs] = p.obs_w[i]
+            p.obs[next_obs] = o
+            push!(p.w, resize!(w′, m_max))
+            next_obs += 1
+        end
+    end
+
+    n_obs = length(p.w)
+    resize!(p.obs, n_obs)
+    resize!(p.obs_w, n_obs)
+
+    for i in eachindex(p.w)
+        reweight!(view(p.w[i], (m_min+1):m_max), view(w, (m_min+1):m_max), view(P, (m_min+1):m_max), a, p.obs[i], p.pomdp)
+    end
+
+    return nothing
+end
+
+function reweight!(w′::T, w::SubArray{Float64,1}, P::SubArray{S,1}, a::A, o::O, m::M) where {T<:AbstractVector{Float64},S,A,O,M<:POMDP{S,A,O}}
+    @inbounds for i in eachindex(w′)
+        if w[i] === 0.0
+            w′[i] = 0.0
+        else
+            # w′[i] = w[i] * obs_weight(m, Φ[i], a, P[i], o)
+            w′[i] = w[i] * pdf(observation(m, a, P[i]), o)
+        end
+    end
+end
+
+function in_packing(norm_w::Vector{Float64}, W::SubArray{Vector{Float64},1}, δ::Float64)
+    @inbounds for i in eachindex(W)
+        if norm(W[i] - norm_w, 1) <= δ
+            return i
+        end
+    end
+    return 0
+end
+
+function propagate_particles(D::AdaOPSTree{S,A,O}, belief::WeightedParticleBelief{S}, a::A, resampled::Bool, p::AdaOPSPlanner{S,A,O,M,N}) where {S,A,O,M<:POMDP{S,A,O},N}
+    m_min = p.sol.m_init
+    m_max = ceil(Int, p.sol.sigma * p.sol.m_init)
+
+    Φ = particles(belief)
+    P = D.ba_particles[D.ba+1]
+
+    Rsum = 0.0
+    k = 0 # number of multidimensional bins
+    n = 0 # number of used particles
+    m = N === 0 ? m_max : m_min # number of needed particles
+    while n < m
+        for i in (n+1):m
+            w = weight(belief, i)
+            if w === 0.0
+                push!(P, Φ[i])
+            else
+                sp, o, r = @gen(:sp, :o, :r)(p.pomdp, Φ[i], a, p.rng)
+                Rsum += w * r
+                push!(P, sp)
+                obs_ind = get(p.obs_ind_dict, o, 0)
+                if obs_ind !== 0
+                    p.obs_w[obs_ind] += w
                 else
-                    push!(freqs, 1)
-                    obs_ind_dict[o] = length(freqs)
-                    obs_ind = obs_ind_dict[o]
+                    push!(p.obs_w, w)
+                    push!(p.obs, o)
+                    p.obs_ind_dict[o] = length(p.obs)
                 end
-                if p.sol.grid !== nothing && access(p.sol.grid, access_cnt, sp, p.pomdp)
+                if resampled && N !== 0 && access(p.sol.grid, p.access_cnt, P[i], p.pomdp)
                     k += 1
                 end
             end
         end
-        if nonterminal == 0
-            return -D.u[b], -D.l[b]
+        n = m
+        if N !== 0
+            m = min(m_max, ceil(Int, p.sol.MESS(k, p.sol.zeta)::Float64))
         end
-        m_for_packing = curr_particle_num
-        m = curr_particle_num
-        # Initialize likelihood_sums and likelihood_square_sums such that the default ESS is Inf
-        resize!(likelihood_sums, length(freqs))
-        fill!(likelihood_sums, Inf)
-        resize!(likelihood_square_sums, length(freqs))
-        fill!(likelihood_square_sums, 1.0)
-        bp = D.b_len
-        for (o, obs_ind) in obs_ind_dict
-            w = length(D.weights) > bp ? D.weights[bp+1] : Float64[]
-            empty!(w)
-            likelihood_sum = 0.0
-            likelihood_square_sum = 0.0
-            for j in 1:m
-                if all_states[j] !== missing
-                    # likelihood = obs_weight(p.pomdp, resampled[j], a, all_states[j], o)
-                    likelihood = pdf(observation(p.pomdp, a, all_states[j]), o)
-                    likelihood_sum += likelihood
-                    likelihood_square_sum += likelihood * likelihood
-                    push!(w, likelihood)
-                end
-            end
-            if p.sol.delta > 0.0
-                resize!(norm_w[obs_ind], length(w))
-                norm_w[obs_ind][:] = w ./ likelihood_sum
-                for (o′, w′) in wdict
-                    new_obs_ind = obs_ind_dict[o′]
-                    if norm(norm_w[obs_ind] - norm_w[new_obs_ind], 1) <= p.sol.delta
-                        freqs[new_obs_ind] += freqs[obs_ind]
-                        obs_ind_dict[o] = new_obs_ind
-                        o = o′
-                        break
-                    end
-                end
-            end
-            if !haskey(wdict, o)
-                likelihood_sums[obs_ind] = likelihood_sum
-                likelihood_square_sums[obs_ind] = likelihood_square_sum
-                wdict[o] = w
-                bp += 1
-            end
-        end
-
-        while true
-            curr_particle_num = m
-            ESS = likelihood_sums .* likelihood_sums ./ likelihood_square_sums
-            if p.sol.grid !== nothing
-                MESS = p.sol.MESS(k, p.sol.zeta)
-            else
-                MESS = m_max
-            end
-            m = ceil(Int, min(m_max, maximum(curr_particle_num .* MESS ./ ESS)))
-            if curr_particle_num >= m
-                break
-            end
-
-            for i in (curr_particle_num+1):m
-                s = resampled[i]
-                if isterminal(p.pomdp, s)
-                    all_states[i] = missing
-                else
-                    sp, o, r = @gen(:sp, :o, :r)(p.pomdp, s, a, p.rng)
-                    Rsum += r
-                    all_states[i] = sp
-                    push!(next_states, sp)
-                    for (o, w) in wdict
-                        # likelihood = obs_weight(p.pomdp, s, a, sp, o)
-                        likelihood = pdf(observation(p.pomdp, a, sp), o)
-                        push!(w, likelihood)
-                        obs_ind = obs_ind_dict[o]
-                        likelihood_sums[obs_ind] += likelihood
-                        likelihood_square_sums[obs_ind] += likelihood * likelihood
-                    end
-                    if !haskey(obs_ind_dict, o)
-                        w = length(D.weights) > bp ? D.weights[bp+1] : Float64[]
-                        empty!(w)
-                        obs_ind = length(freqs) + 1
-                        likelihood_sum = 0.0
-                        likelihood_square_sum = 0.0
-                        for j in 1:m_for_packing
-                            if all_states[j] !== missing
-                                # likelihood = obs_weight(p.pomdp, resampled[j], a, all_states[j], o)
-                                likelihood = pdf(observation(p.pomdp, a, all_states[j]), o)
-                                likelihood_sum += likelihood
-                                likelihood_square_sum += likelihood * likelihood
-                                push!(w, likelihood)
-                            end
-                        end
-                        if p.sol.delta > 0.0
-                            normalized_w = norm_w[obs_ind]
-                            resize!(normalized_w, length(first(norm_w)))
-                            normalized_w[:] = w[1:length(normalized_w)] ./ likelihood_sum
-                            for (o′, w′) in wdict
-                                new_obs_ind = obs_ind_dict[o′]
-                                if norm(normalized_w - norm_w[new_obs_ind], 1) <= p.sol.delta
-                                    obs_ind_dict[o] = new_obs_ind
-                                    o = o′
-                                    break
-                                end
-                            end
-                        end
-                        if !haskey(wdict, o)
-                            for j in (m_for_packing+1):i
-                                if all_states[j] !== missing
-                                    # likelihood = obs_weight(p.pomdp, resampled[j], a, all_states[j], o)
-                                    likelihood = pdf(observation(p.pomdp, a, all_states[j]), o)
-                                    likelihood_sum += likelihood
-                                    likelihood_square_sum += likelihood * likelihood
-                                    push!(w, likelihood)
-                                end
-                            end
-                            push!(freqs, 0)
-                            push!(likelihood_sums, likelihood_sum)
-                            push!(likelihood_square_sums, likelihood_square_sum)
-                            wdict[o] = w
-                            obs_ind_dict[o] = obs_ind
-                            bp += 1
-                        end
-                    end
-                    obs_ind = obs_ind_dict[o]
-                    freqs[obs_ind] += 1
-                    if p.sol.grid !== nothing && access(p.sol.grid, access_cnt, sp, p.pomdp)
-                        k += 1
-                    end
-                end
-            end
-        end
-
-        D.ba_children[ba] = [D.b_len+1:bp;]
-        D.ba_parent[ba] = b
-        D.ba_r[ba] = Rsum / curr_particle_num
-        D.ba_action[ba] = a
-        push!(D.children[b], ba)
-
-        nbp = bp - D.b_len
-        bp = D.b_len
-        D.b_len += nbp
-        resize_b!(D, D.b_len)
-        wpf_belief = WPFBelief(next_states, fill(1/length(next_states), length(next_states)), 1.0, D.b_len, D.Delta[b] + 1, D, first(keys(wdict)))
-        bounds_dict = bounds(p.bounds, p.pomdp, wpf_belief, wdict, p.sol.bounds_warnings)
-        ESS = likelihood_sums .* likelihood_sums ./ likelihood_square_sums
-        for (o, w) in wdict
-            bp += 1
-            D.weights[bp] = w
-            empty!(D.children[bp])
-            D.parent[bp] = ba
-            D.Delta[bp] = D.Delta[b] + 1
-            D.obs[bp] = o
-            obs_ind = obs_ind_dict[o]
-            D.obs_prob[bp] = freqs[obs_ind] / curr_particle_num
-            D.Deff[bp] = curr_particle_num/ESS[obs_ind]
-            D.l[bp], D.u[bp] = bounds_dict[o]
-        end
-        D.ba_l[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.l[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
-        D.ba_u[ba] = D.ba_r[ba] + discount(p.pomdp) * sum(D.u[bp] * D.obs_prob[bp] for bp in D.ba_children[ba])
     end
-    D.ba_len += length(acts)
-    return maximum(D.ba_u[ba] for ba in D.children[b]) - D.u[b], maximum(D.ba_l[ba] for ba in D.children[b]) - D.l[b]
+    return P, Rsum
 end
 
-function resize_b!(D::AdaOPSTree, n::Int)
+function resize_b!(D::AdaOPSTree, n::Int, m_max::Int, num_a::Int)
     if n > length(D.weights)
-        for i in (length(D.weights)+1):n
-            push!(D.children, Int[])
-        end
         resize!(D.weights, n)
+        resize!(D.children, n)
+        @inbounds for i in (length(D.parent)+1):n
+            D.weights[i] = sizehint!(Float64[], m_max)
+            D.children[i] = sizehint!(Int[], num_a)
+        end
         resize!(D.parent, n)
         resize!(D.Delta, n)
         resize!(D.u, n)
         resize!(D.l, n)
         resize!(D.obs, n)
         resize!(D.obs_prob, n)
-        resize!(D.Deff, n)
     end
+    return nothing
 end
 
-function resize_ba!(D::AdaOPSTree{S}, n::Int) where S
+function resize_ba!(D::AdaOPSTree{S}, n::Int, m_max::Int) where S
     if n > length(D.ba_children)
-        for i in length(D.ba_children):n
-            push!(D.ba_particles, S[])
-        end
+        resize!(D.ba_particles, n)
         resize!(D.ba_children, n)
+        @inbounds for i in (length(D.ba_parent)+1):n
+            D.ba_particles[i] = sizehint!(S[], m_max)
+            D.ba_children[i] = sizehint!(Int[], m_max)
+        end
         resize!(D.ba_parent, n)
         resize!(D.ba_u, n)
         resize!(D.ba_l, n)
         resize!(D.ba_r, n)
         resize!(D.ba_action, n)
     end
+    return nothing
 end

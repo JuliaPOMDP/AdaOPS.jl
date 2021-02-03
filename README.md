@@ -20,7 +20,7 @@ using POMDPs, POMDPModels, POMDPSimulators, AdaOPS
 
 pomdp = TigerPOMDP()
 
-solver = AdaOPSSolver(bounds=(-20.0, 0.0))
+solver = AdaOPSSolver(bounds=IndependentBounds(-20.0, 0.0))
 planner = solve(solver, pomdp)
 
 for (s, a, o) in stepthrough(pomdp, planner, "s,a,o", max_steps=10)
@@ -60,10 +60,8 @@ A delta-packing of observation branches will be generated, i.e., the belief node
 `m_init` is the least number of particles needed to estimate a belief. Only when a belief is consist of at least `m_init`, we can estimate the L1 distance between observation branches and merge the similar ones.
 ### Bounds
 
-#### Tuple bounds
-The bound passed into `AdaOPSSolver` can be a tuple of form `(lower_bound, upper_bound)`.
-#### Function bounds
-The bound passed into `AdaOPSSolver` can be a function in the form of `lower_bound, upper_bound = f(pomdp, wpf_belief)`.
+#### Dependent bounds
+The bound passed into `AdaOPSSolver` can be a function in the form of `lower_bound, upper_bound = f(pomdp, wpf_belief)`, or any other objects for which a `bounds` function is implemented.
 
 #### Independent bounds
 
@@ -122,5 +120,6 @@ b0 = initialstate(pomdp)
 
 a, info = action_info(planner, b0)
 inchrome(D3Tree(info[:tree], init_expand=5))
+info_analysis(info)
 ```
 will create an interactive tree that looks like this:

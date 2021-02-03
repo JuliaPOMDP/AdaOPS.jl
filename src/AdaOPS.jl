@@ -13,7 +13,9 @@ using POMDPSimulators
 using POMDPPolicies
 using POMDPLinter
 using LinearAlgebra
+using Statistics
 using Distributions
+using Plots
 
 using MCTS
 import MCTS: convert_to_policy
@@ -27,10 +29,8 @@ export
     AdaOPSTree,
 
     WPFBelief,
-    previous_obs,
 
     default_action,
-    NoGap,
 
     IndependentBounds,
     bounds,
@@ -49,12 +49,11 @@ export
     StateGrid,
     KLDSampleSize,
 
-    extra_info_analysis,
-    build_tree_test
+    info_analysis,
+    hist_analysis
 
 include("grid.jl")
 include("Sampling.jl")
-include("wpf_belief.jl")
 
 """
     AdaOPSSolver(<keyword arguments>)
@@ -80,7 +79,7 @@ parameters match the definitions in the paper exactly.
 Further information can be found in the field docstrings (e.g.
 `?AdaOPSSolver.xi`)
 """
-@with_kw mutable struct AdaOPSSolver{R<:AbstractRNG} <: Solver
+@with_kw mutable struct AdaOPSSolver{N, R<:AbstractRNG} <: Solver
     "The target gap between the upper and the lower bound at the root of the AdaOPS tree."
     epsilon_0::Float64                      = 0.0
 
@@ -94,7 +93,7 @@ Further information can be found in the field docstrings (e.g.
     xi::Float64                             = 0.95
 
     "State grid for adaptive particle filters"
-    grid::Union{Nothing, StateGrid}         = nothing
+    grid::StateGrid{N}                      = StateGrid(()->(),)
 
     "The initial number of particles at root."
     m_init::Int                             = 30
@@ -139,7 +138,41 @@ Further information can be found in the field docstrings (e.g.
     overtime_warning_threshold::Float64     = 2.0
 end
 
-mutable struct AdaOPSTree{S,A,O}
+struct AdaOPSPlanner{S, A, O, P<:POMDP{S,A,O}, N, B, RNG<:AbstractRNG} <: Policy
+    sol::AdaOPSSolver{N}
+    pomdp::P
+    bounds::B
+    discounts::Vector{Float64}
+    rng::RNG
+    # The following attributes are used to avoid reallocating memory
+    resampled::WeightedParticleBelief{S}
+    obs::Vector{O}
+    obs_ind_dict::Dict{O, Int}
+    w::Vector{Vector{Float64}}
+    norm_w::Vector{Vector{Float64}}
+    access_cnt::Array{Int, N}
+    obs_w::Vector{Float64}
+    u::Vector{Float64}
+    l::Vector{Float64}
+end
+
+function AdaOPSPlanner(sol::AdaOPSSolver{N}, pomdp::POMDP{S,A,O}) where {S,A,O,N}
+    rng = deepcopy(sol.rng)
+    bounds = init_bounds(sol.bounds, pomdp, sol, rng)
+    discounts = discount(pomdp) .^[0:(sol.D+1);]
+
+    m_min = sol.m_init
+    m_max = ceil(Int, sol.sigma * m_min)
+    access_cnt = sol.grid !== nothing ? zeros_like(sol.grid) : Int[]
+    norm_w = Vector{Float64}[Vector{Float64}(undef, m_min) for i in 1:m_max]
+    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, 
+                        WeightedParticleBelief(Vector{S}(undef, m_max), ones(m_max), m_max), sizehint!(O[], m_max),
+                        Dict{O, Int}(), sizehint!(Vector{Float64}[], m_max), norm_w, access_cnt,
+                        sizehint!(Float64[], m_max), sizehint!(Float64[], m_max), sizehint!(Float64[], m_max))
+end
+
+mutable struct AdaOPSTree{S,A,O,RB}
+    # belief nodes
     weights::Vector{Vector{Float64}} # stores weights for *belief node*
     children::Vector{Vector{Int}} # to children *ba nodes*
     parent::Vector{Int} # maps to the parent *ba node*
@@ -148,8 +181,8 @@ mutable struct AdaOPSTree{S,A,O}
     l::Vector{Float64}
     obs::Vector{O}
     obs_prob::Vector{Float64}
-    Deff::Vector{Float64}
 
+    # action nodes
     ba_particles::Vector{Vector{S}} # stores particles for *ba nodes*
     ba_children::Vector{Vector{Int}}
     ba_parent::Vector{Int} # maps to parent *belief node*
@@ -158,79 +191,12 @@ mutable struct AdaOPSTree{S,A,O}
     ba_r::Vector{Float64} # needed for backup
     ba_action::Vector{A}
 
-    root_belief::Any
-    b_len::Int
-    ba_len::Int
+    root_belief::RB
+    b::Int
+    ba::Int
 end
 
-struct AdaOPSPlanner{P<:POMDP, B, RNG<:AbstractRNG, S, O} <: Policy
-    sol::AdaOPSSolver
-    pomdp::P
-    bounds::B
-    discounts::Vector{Float64}
-    rng::RNG
-    # The following attributes are used to avoid reallocating memory
-    tree::AdaOPSTree
-    resampled::Vector{S}
-    all_states::Vector{Union{S, Missing}}
-    wdict::Dict{O, Vector{Float64}}
-    norm_w::Vector{Vector{Float64}}
-    obs_ind_dict::Dict{O, Int}
-    freqs::Vector{Float64}
-    likelihood_sums::Vector{Float64}
-    likelihood_square_sums::Vector{Float64}
-    access_cnt::Array{Int}
-end
-
-function AdaOPSPlanner(sol::AdaOPSSolver, pomdp::POMDP)
-    S = statetype(pomdp)
-    A = actiontype(pomdp)
-    O = obstype(pomdp)
-
-    rng = deepcopy(sol.rng)
-    bounds = init_bounds(sol.bounds, pomdp, sol, rng)
-    discounts = discount(pomdp) .^[0:(sol.D+1);]
-
-    tree = AdaOPSTree{S,A,O}([Float64[]],
-                         [Int[]],
-                         [0],
-                         [0],
-                         [Inf],
-                         [0.0],
-                         Vector{O}(undef, 1),
-                         [1.0],
-                         [Inf],
-
-                         Vector{S}[],
-                         Vector{Int}[],
-                         Int[],
-                         Float64[],
-                         Float64[],
-                         Float64[],
-                         A[],
-
-                         initialstate(pomdp),
-                         1,
-                         0
-                 )
-
-    m_max = ceil(Int, sol.sigma * sol.m_init)
-    if sol.grid !== nothing
-        access_cnt = zeros_like(sol.grid)
-    else
-        access_cnt = Int[]
-    end
-    norm_w = [Vector{Float64}(undef, sol.m_init) for i in 1:m_max]
-    planner = AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, tree, Vector{S}(undef, m_max),
-                        Vector{Union{S,Missing}}(undef, m_max), Dict{O, Vector{Float64}}(), norm_w,
-                        Dict{O, Int}(), Float64[], Float64[], Float64[], access_cnt)
-    thres = planner.sol.overtime_warning_threshold
-    planner.sol.overtime_warning_threshold = Inf
-    build_tree(planner, initialstate(pomdp)) # For the preallocation of memory
-    planner.sol.overtime_warning_threshold = thres
-    return planner
-end
-
+include("wpf_belief.jl")
 include("bounds.jl")
 include("tree.jl")
 include("planner.jl")

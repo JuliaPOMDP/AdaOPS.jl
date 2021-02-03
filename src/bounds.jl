@@ -1,96 +1,48 @@
-function bounds_sanity_check(pomdp::POMDP, b::WPFBelief, L, U)
+function bounds_sanity_check(pomdp::P, b::WPFBelief{S}, L::Float64, U::Float64) where {S,P<:POMDP{S}}
     if L > U
-        @warn("L ($L) > U ($U)   |ϕ| = $(n_particles(b))")
+        @warn(@sprintf("L (%-4.1f) > U (%-4.1f)", L, U))
         @info("Try e.g. `IndependentBounds(l, u, consistency_fix_thresh=1e-5)`.", maxlog=1)
     end
-    if all(isterminal(pomdp, b.particles[i]) for i in 1:n_particles(b) if weight(b, i) > 0)
-        if L != 0.0 || U != 0.0
-            error(@sprintf("If all states are terminal, lower and upper bounds should be zero (L=%-10.2g, U=%-10.2g). (try IndependentBounds(l, u, check_terminal=true))", L, U))
-        end
+    if (L !== 0.0 || U !== 0.0) && all(isterminal(pomdp, particle(b, i)) for i in 1:n_particles(b) if weight(b, i) > 0.0)
+        error(@sprintf("If all states are terminal, lower and upper bounds should be zero (L=%-4.1g, U=%-4.1g). (try IndependentBounds(l, u, check_terminal=true))", L, U))
     end
     if isinf(L) || isnan(L)
-        @warn("L = $L. Infinite bounds are not supported.")
+        @warn(@sprintf("L = %-4.1f. Infinite bounds are not supported.", L))
     end
     if isinf(U) || isnan(U)
-        @warn("U = $U. Infinite bounds are not supported.")
+        @warn(@sprintf("U = %-4.1f. Infinite bounds are not supported.", U))
     end
+    return nothing
 end
 
-init_bound(bd, pomdp, sol, rng) = bd
+"""
+    Dependent Bounds
+
+Specify lower and upper bounds that are not independent.
+###
+It can take a function, `f(pomdp, belief)`, that returns both lower and upper bounds.
+It can be any object for which a `bounds` function is implemented
+
+"""
+
 init_bounds(bds, pomdp, sol, rng) = bds
-init_bounds(t::Tuple, pomdp, sol, rng) = (init_bound(first(t), pomdp, sol, rng), init_bound(last(t), pomdp, sol, rng))
-
-# Used when the lower or upper bound is a fixed number
-bound(n::Number, pomdp::POMDP, b::WPFBelief, max_depth::Int) = convert(Float64, n)
-
-function bound(n::Number, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
-    u = bound(n, pomdp, b, max_depth)
-    Dict(o=>u for (o,w) in wdict)
-end
-
-# Used when both lower and upper bounds are fixed numbers
-function bounds(t::Tuple, pomdp::POMDP, b::WPFBelief, bounds_warning::Bool = true)
-    l, u = bound(t[1], pomdp, b, ceil(Int, 5/(1-discount(pomdp)))), bound(t[2], pomdp, b, ceil(Int, 5/(1-discount(pomdp))))
-    if bounds_warning
-        bounds_sanity_check(pomdp, b, l, u)
-    end
-    return (l, u)
-end
-
-function bounds(t::Tuple, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, bounds_warning::Bool = true) where {S, O}
-    bound_dict = Dict{O, Tuple{Float64, Float64}}()
-    l, u = bounds(t, pomdp, b, bounds_warning)
-    if bounds_warning
-        bounds_sanity_check(pomdp, b, l, u)
-    end
-    for (o, w) in wdict
-        bound_dict[o] = (l, u)
-    end
-    return bound_dict
-end
-
-# Used when the lower or upper bound is an object for which a `bound` function is implemented
-function bound(bd, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
-    bound_dict = Dict{O, Float64}()
-    for (o, w) in wdict
-        switch_to_sibling!(b, o, w)
-        bound_dict[o] = bound(bd, pomdp, b, max_depth)
-    end
-    return bound_dict
-end
-
-# Used when lower or upper bound is a function
-bound(f::Function, pomdp::POMDP, b::WPFBelief, max_depth::Int) = f(pomdp, b)
-
-function bound(f::Function, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
-    bound_dict = Dict{O, Float64}()
-    for (o, w) in wdict
-        switch_to_sibling!(b, o, w)
-        bound_dict[o] = bound(f, pomdp, b, max_depth)
-    end
-    return bound_dict
-end
 
 # Used to initialize lower and upper bounds with a single function
-function bounds(f::Function, pomdp::POMDP, b::WPFBelief, bounds_warning::Bool = true)
+function bounds(f::Function, pomdp::P, b::WPFBelief{S,A,O}, max_depth::Int, bounds_warning::Bool) where {S,A,O,P<:POMDP{S,A,O}}
     l, u = f(pomdp, b)
     if bounds_warning
         bounds_sanity_check(pomdp, b, l, u)
     end
-    return (l, u)
+    return l, u
 end
 
-function bounds(f::Function, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, bounds_warning::Bool) where S where O
-    bound_dict = Dict{O, Tuple{Float64, Float64}}()
-    for (o, w) in wdict
-        switch_to_sibling!(b, o, w)
-        l, u = bounds(f, pomdp, b, bounds_warning)
-        if bounds_warning
-            bounds_sanity_check(pomdp, b, l, u)
-        end
-        bound_dict[o] = (l, u)
+# Used to initialize both the lower and upper bound with an object for which a `bounds` function is implemented
+function bounds!(L::Vector{Float64}, U::Vector{Float64}, bd::B, pomdp::P, b::WPFBelief{S,A,O}, W::Vector{Vector{Float64}}, obs::Vector{O}, max_depth::Int, bounds_warning::Bool) where {S,A,O,P<:POMDP{S,A,O},B}
+    @inbounds for i in eachindex(W)
+        switch_to_sibling!(b, obs[i], W[i])
+        L[i], U[i] = bounds(bd, pomdp, b, max_depth, bounds_warning)
     end
-    return bound_dict
+    return L, U
 end
 
 
@@ -98,6 +50,9 @@ end
     IndependentBounds(lower, upper, check_terminal=false, consistency_fix_thresh=0.0)
 
 Specify lower and upper bounds that are independent of each other (the most common case).
+A lower or upper bound can be a Number, a Function, `f(pomdp, belief)`, that returns a bound, an object for which a `bound` function 
+is implemented. Specifically, for FOValue, POValue, FORollout, SemiPORollout, and PORollout, a `bound` function is already implemented.
+You can also implement a `bound!` function to initialize sibling beliefs simultaneously, if it could provide a further performace gain.
 
 # Keyword Arguments
 - `check_terminal::Bool=false`: if true, then if all the states in the belief are terminal, the upper and lower bounds will be overridden and set to 0.
@@ -109,73 +64,92 @@ mutable struct IndependentBounds{L, U}
     upper::U
     check_terminal::Bool
     consistency_fix_thresh::Float64
-    max_depth::Union{Nothing, Int}
 end
 
 function IndependentBounds(l, u;
                            check_terminal=false,
-                           consistency_fix_thresh=0.0,
-                           max_depth=nothing)
-    return IndependentBounds(l, u, check_terminal, consistency_fix_thresh, max_depth)
+                           consistency_fix_thresh=0.0)
+    return IndependentBounds(l, u, check_terminal, consistency_fix_thresh)
 end
 
-function init_bounds(bds::IndependentBounds, pomdp::POMDP, sol::AdaOPSSolver, rng::R) where R <: AbstractRNG
+function init_bounds(bds::IndependentBounds, pomdp::POMDP, sol::AdaOPSSolver, rng::AbstractRNG)
     return IndependentBounds(convert_estimator(bds.lower, sol, pomdp),
                              convert_estimator(bds.upper, sol, pomdp),
                              bds.check_terminal,
                              bds.consistency_fix_thresh,
-                             something(bds.max_depth, sol.D)
                             )
 end
 
-function bounds(bds::IndependentBounds, pomdp::POMDP, b::WPFBelief, bounds_warning::Bool = true)
-    if bds.check_terminal && all(isterminal(pomdp, b.particles[i]) for i in 1:n_particles(b) if weight(b, i) > 0)
+function bounds(bds::IndependentBounds, pomdp::P, b::WPFBelief{S,A,O}, max_depth::Int, bounds_warning::Bool) where {S,A,O,P<:POMDP{S,A,O}}
+    if bds.check_terminal && all(isterminal(pomdp, particle(b, i)) for i in 1:n_particles(b) if weight(b, i) > 0.0)
         return (0.0, 0.0)
     end
-    l = bound(bds.lower, pomdp, b, bds.max_depth)
-    u = bound(bds.upper, pomdp, b, bds.max_depth)
+    l = bound(bds.lower, pomdp, b, max_depth)
+    u = bound(bds.upper, pomdp, b, max_depth)
     if u < l && u >= l-bds.consistency_fix_thresh
         u = l
     end
     if bounds_warning
         bounds_sanity_check(pomdp, b, l, u)
     end
-    return (l,u)
+    return l, u
 end
 
-function bounds(bds::IndependentBounds, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Array{Float64,1}}, bounds_warning::Bool = true) where O
-    l = bound(bds.lower, pomdp, b, wdict, bds.max_depth)
-    u = bound(bds.upper, pomdp, b, wdict, bds.max_depth)
-    bound_dict = Dict{O, Tuple{Float64, Float64}}()
-    for (o, w) in wdict
-        if bds.check_terminal && all(isterminal(pomdp, b.particles[i]) for i in 1:length(w) if w[i] > 0)
-            bound_dict[o] = (0.0, 0.0)
-        else
-            if u[o] < l[o] && u[o] >= l[o]-bds.consistency_fix_thresh
-                u[o] = l[o]
+function bounds!(L::Vector{Float64}, U::Vector{Float64}, bds::IndependentBounds{LB,UB}, pomdp::P, b::WPFBelief{S,A,O}, W::Vector{Vector{Float64}}, obs::Vector{O}, max_depth::Int, bounds_warning::Bool) where {LB,UB,S,A,O,P<:POMDP{S,A,O}}
+    bound!(L, bds.lower, pomdp, b, W, obs, max_depth)
+    bound!(U, bds.upper, pomdp, b, W, obs, max_depth)
+    if bds.check_terminal
+        @inbounds for i in eachindex(W)
+            w = W[i]
+            if (L[i] !== 0.0 || U[i] !== 0.0) && all(isterminal(pomdp, particle(b, j)) for j in 1:n_particles(b) if w[j] > 0.0)
+                L[i] = 0.0
+                U[i] = 0.0
             end
-            if bounds_warning
-                switch_to_sibling!(b, o, w)
-                bounds_sanity_check(pomdp, b, l[o], u[o])
-            end
-            bound_dict[o] = (l[o], u[o])
         end
     end
-    return bound_dict
+    @inbounds for i in eachindex(W)
+        if U[i] < L[i] && U[i] >= L[i]-bds.consistency_fix_thresh
+            U[i] = L[i]
+        end
+    end
+    if bounds_warning
+        @inbounds for i in eachindex(W)
+            switch_to_sibling!(b, obs[i], W[i])
+            bounds_sanity_check(pomdp, b, L[i], U[i])
+        end
+    end
+    return L, U
 end
 
-struct SolvedFOValue{P<:POMDPs.Policy}
+# Used when the lower or upper bound is a fixed number
+bound(n::N, pomdp, b, max_depth) where N<:Real = convert(Float64, n)
+bound!(V::Vector{Float64}, n::Float64, pomdp::P, b::WPFBelief{S,A,O}, W::Vector{Vector{Float64}}, obs::Vector{O}, max_depth::Int) where {S,A,O,P<:POMDP{S,A,O}} = fill!(V, n)
+bound!(V::Vector{Float64}, n::Int, pomdp::P, b::WPFBelief{S,A,O}, W::Vector{Vector{Float64}}, obs::Vector{O}, max_depth::Int) where {S,A,O,P<:POMDP{S,A,O}} = fill!(V, convert(Float64, n))
+
+# Used when lower or upper bound is a function
+bound(f::Function, pomdp::P, b::WPFBelief{S,A,O}, max_depth::Int) where {S,A,O,P<:POMDP{S,A,O}} = f(pomdp, b)
+
+# Used when the lower or upper bound is an object for which a `bound` function is implemented
+function bound!(V::Vector{Float64}, bd::B, pomdp::P, b::WPFBelief{S,A,O}, W::Vector{Vector{Float64}}, obs::Vector{O}, max_depth::Int) where {S,A,O,P<:POMDP{S,A,O},B}
+    @inbounds for i in eachindex(W)
+        switch_to_sibling!(b, obs[i], W[i])
+        V[i] = bound(bd, pomdp, b, max_depth)
+    end
+    return V
+end
+
+struct SolvedFOValue{P<:Policy}
     policy::P
     values::Vector{Float64}
 end
 
-struct SolvedFORollout{P<:POMDPs.Policy, RNG<:AbstractRNG}
+struct SolvedFORollout{P<:Policy, RNG<:AbstractRNG}
     policy::P
     values::Vector{Float64}
     rng::RNG
 end
 
-struct SolvedPORollout{P<:POMDPs.Policy, U<:POMDPs.Updater, RNG<:AbstractRNG}
+struct SolvedPORollout{P<:Policy, U<:Updater, RNG<:AbstractRNG}
     policy::P
     values::Vector{Float64}
     updater::U
@@ -183,18 +157,18 @@ struct SolvedPORollout{P<:POMDPs.Policy, U<:POMDPs.Updater, RNG<:AbstractRNG}
 end
 
 struct POValue
-    solver::Union{POMDPs.Solver, POMDPs.Policy}
+    solver::Union{Solver, Policy}
 end
 
-struct SolvedPOValue{P<:POMDPs.Policy}
+struct SolvedPOValue{P<:Policy}
     policy::P
 end
 
 struct SemiPORollout
-    solver::Union{POMDPs.Solver, POMDPs.Policy}
+    solver::Union{Solver, Policy}
 end
 
-mutable struct SolvedSemiPORollout{P<:POMDPs.Policy, S, O, RNG<:AbstractRNG}
+mutable struct SolvedSemiPORollout{S, O, P<:Policy, RNG<:AbstractRNG}
     policy::P
     inner_ind::Int
     leaf_ind::Int
@@ -205,88 +179,49 @@ mutable struct SolvedSemiPORollout{P<:POMDPs.Policy, S, O, RNG<:AbstractRNG}
     rng::RNG
 end
 
-function bound(bd::SolvedFORollout, pomdp::POMDP, b::WPFBelief, max_depth::Int)
+function bound(bd::SolvedFORollout, pomdp::POMDP, b::WPFBelief{S}, max_depth::Int) where S
     resize!(bd.values, n_particles(b))
-    for (i, s) in enumerate(particles(b))
-        bd.values[i] = estimate_value(bd, pomdp, s, b, max_depth-b.depth)
-    end
-    return dot(b.weights, bd.values)/b.weight_sum
+    broadcast!((s)->estimate_value(bd, pomdp, s, b, max_depth-b.depth), bd.values, particles(b))
+    return dot(weights(b), bd.values)/weight_sum(b)
 end
 
-function bound(bd::SolvedFORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
+function bound!(V::Vector{Float64}, bd::SolvedFORollout, pomdp::POMDP, b::WPFBelief{S}, W::Vector{Vector{Float64}}, obs::Vector, max_depth::Int) where S
     resize!(bd.values, n_particles(b))
-    for (i, s) in enumerate(particles(b))
-        bd.values[i] = estimate_value(bd, pomdp, s, b, max_depth-b.depth)
+    broadcast!((s)->estimate_value(bd, pomdp, s, b, max_depth-b.depth), bd.values, particles(b))
+    @inbounds for i in eachindex(W)
+        V[i] = dot(bd.values, W[i]) / sum(W[i])
     end
-    bound_dict = Dict{O, Float64}()
-    for (o, w) in wdict
-        bound_dict[o] = dot(w, bd.values)/sum(w)
-    end
-    return bound_dict
+    return V
 end
 
-function bound(bd::SolvedPORollout, pomdp::POMDP, b::WPFBelief, max_depth::Int)
+function bound(bd::SolvedPORollout{P}, pomdp::M, b::WPFBelief{S,A,O}, max_depth::Int) where {P,S,A,O,M<:POMDP{S,A,O}}
     resize!(bd.values, n_particles(b))
-    for (i, s) in enumerate(particles(b))
-        bd.values[i] = estimate_value(bd, pomdp, s, b, max_depth-b.depth)
-    end
-    return dot(b.weights, bd.values)/b.weight_sum
+    broadcast!((s)->estimate_value(bd, pomdp, s, b, max_depth-b.depth), bd.values, particles(b))
+    return dot(weights(b), bd.values)/weight_sum(b)
 end
 
-function bound(bd::SolvedPORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
-    resize!(bd.values, n_particles(b))
-    bound_dict = Dict{O, Float64}()
-    for (o, w) in wdict
-        switch_to_sibling!(b, o, w)
-        for (i, s) in enumerate(particles(b))
-            bd.values[i] = estimate_value(bd, pomdp, s, b, max_depth-b.depth)
-        end
-        bound_dict[o] = dot(w, bd.values)/sum(w)
-    end
-    return bound_dict
-end
-
-function bound(bd::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, max_depth::Int)
+function bound(bd::SolvedSemiPORollout{S,O,P}, pomdp::M, b::WPFBelief{S,A,O}, max_depth::Int) where {P,S,A,O,M<:POMDP{S,A,O}}
     bd.inner_ind = 0
     bd.leaf_ind = 0
-    estimate_value(bd, pomdp, b, max_depth-b.depth)
+    return estimate_value(bd, pomdp, b, max_depth-b.depth)
 end
 
-function bound(bd::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief{S, O}, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where S where O
-    bound_dict = Dict{O, Float64}()
-    for (o, w) in wdict
-        switch_to_sibling!(b, o, w)
-        bound_dict[o] = bound(bd, pomdp, b, max_depth)
-    end
-    return bound_dict
-end
-
-function bound(bd::SolvedFOValue, pomdp::POMDP, b::WPFBelief, max_depth::Int)
+function bound(bd::SolvedFOValue{P}, pomdp::M, b::WPFBelief{S}, max_depth::Int) where {P,S,M<:POMDP{S}}
     resize!(bd.values, n_particles(b))
-    for (i, s) in enumerate(particles(b))
-        bd.values[i] = value(bd.policy, s)
-    end
-    return dot(b.weights, bd.values)/b.weight_sum
+    broadcast!((s)->value(bd.policy, s), bd.values, particles(b))
+    return dot(weights(b), bd.values)/weight_sum(b)
 end
 
-function bound(bd::SolvedFOValue, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where O
+function bound!(V::Vector{Float64}, bd::SolvedFOValue{P}, pomdp::M, b::WPFBelief{S}, W::Vector{Vector{Float64}}, obs::Vector, max_depth::Int) where {P,S,M<:POMDP{S}}
     resize!(bd.values, n_particles(b))
-    for (i, s) in enumerate(particles(b))
-        bd.values[i] = value(bd.policy, s)
+    broadcast!((s)->value(bd.policy, s), bd.values, particles(b))
+    @inbounds for i in eachindex(W)
+        V[i] = dot(bd.values, W[i]) / sum(W[i])
     end
-    return Dict(o=>(dot(w, bd.values)/sum(w)) for (o, w) in wdict)
+    return V
 end
 
-bound(bd::SolvedPOValue, pomdp::POMDP, b::WPFBelief, max_depth::Int) = value(bd.policy, b)
-
-function bound(bd::SolvedPOValue, pomdp::POMDP, b::WPFBelief, wdict::Dict{O, Array{Float64,1}}, max_depth::Int) where O
-    bound_dict = Dict{O, Float64}()
-    for (o, w) in wdict
-        switch_to_sibling!(b, o, w)
-        bound_dict[o] = value(bd.policy, b)
-    end
-    return bound_dict
-end
+bound(bd::SolvedPOValue{P}, pomdp::M, b::WPFBelief{S,A,O}, max_depth::Int) where {P,S,A,O,M<:POMDP{S,A,O}} = value(bd.policy, b)
 
 # Convert an unsolved estimator to solved estimator
 convert_estimator(ev, solver, mdp) = ev
@@ -333,13 +268,14 @@ POMDPLinter.@POMDP_require estimate_value(estimator::Union{SolvedPORollout,Solve
 end
 
 # Perform a rollout simulation to estimate the value.
+function rollout(est::SolvedPORollout{P,U}, pomdp::M, start_state::S, b::WPFBelief{S,A,O}, steps::Int) where {P,U<:BasicParticleFilter,S,A,O,M<:POMDP{S,A,O}}
+    sim = RolloutSimulator(est.rng, steps)
+    return pf_simulate(sim, pomdp, est.policy, est.updater, b, start_state)
+end
+
 function rollout(est::SolvedPORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int)
     sim = RolloutSimulator(est.rng, steps)
-    if typeof(est.updater) <: BasicParticleFilter
-        return pf_simulate(sim, pomdp, est.policy, est.updater, b, start_state)
-    else
-        return simulate(sim, pomdp, est.policy, est.updater, b, start_state)
-    end
+    return simulate(sim, pomdp, est.policy, est.updater, b, start_state)
 end
 
 POMDPLinter.@POMDP_require rollout(est::SolvedPORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int) begin
@@ -357,13 +293,11 @@ POMDPLinter.@POMDP_require rollout(est::SolvedFORollout, pomdp::POMDP, start_sta
     @subreq simulate(sim, pomdp, est.policy, start_state)
 end
 
-function estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, steps::Integer)
+function estimate_value(est::SolvedSemiPORollout{S,O,P}, pomdp::M, b::WPFBelief{S,A,O}, steps::Int) where {P,S,A,O,M<:POMDP{S,A,O}}
     if steps <= 0 || weight_sum(b) == 0.0
         return 0.0
     end
     est.inner_ind += 1
-    S = statetype(pomdp)
-    O = obstype(pomdp)
     if length(est.probs) < est.inner_ind
         push!(est.obs_ind_dict, Dict{O, Int}())
         push!(est.probs, Float64[])
@@ -415,7 +349,7 @@ function estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, st
                 U += probs[obs_ind] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, POtoFO(est.policy), states[obs_ind][1])
             end
         else
-            bp = WPFBelief(states[obs_ind], weights[obs_ind], o, depth=b.depth+1)
+            bp = WPFBelief(states[obs_ind], weights[obs_ind], 1, b.depth+1, b.tree, o)
             U += probs[obs_ind] * estimate_value(est, pomdp, bp, steps-1)
         end
     end
@@ -423,9 +357,9 @@ function estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, st
 end
 
 # For the partially observable simulation
-function pf_simulate(sim::RolloutSimulator, pomdp::POMDP, policy::Policy, updater::BasicParticleFilter, initial_belief, s)
+function pf_simulate(sim::RolloutSimulator, pomdp::M, policy::P, updater::BasicParticleFilter, initial_belief::WPFBelief{S,A,O}, s::S) where {P,S,A,O,M<:POMDP{S,A,O}}
     eps = sim.eps === nothing ? 0.0 : sim.eps
-    max_steps = sim.max_steps === nothing ? typemax(Int) : sim.max_steps
+    max_steps = sim.max_steps === nothing ? 300 : sim.max_steps
 
     b = initialize_belief(updater, initial_belief)
 
@@ -441,7 +375,7 @@ function pf_simulate(sim::RolloutSimulator, pomdp::POMDP, policy::Policy, update
     return r_total
 end
 
-function update(up::BasicParticleFilter, s, b::ParticleCollection, a)
+function update(up::BasicParticleFilter, s::S, b::ParticleCollection{S}, a::A) where {S,A}
     pm = up._particle_memory
     wm = up._weight_memory
     resize!(pm, n_particles(b))
@@ -460,8 +394,8 @@ function update(up::BasicParticleFilter, s, b::ParticleCollection, a)
     return sp, o, r, bp
 end
 
-struct POtoFO{P<:POMDPs.Policy} <: POMDPs.Policy
+struct POtoFO{P<:Policy} <: Policy
     policy::P
 end
 
-POMDPs.action(p::POtoFO, s) = action(p.policy, ParticleCollection([s]))
+POMDPs.action(p::POtoFO{P}, s::S) where {P,S} = action(p.policy, ParticleCollection([s]))

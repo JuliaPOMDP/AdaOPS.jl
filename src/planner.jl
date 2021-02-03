@@ -4,31 +4,27 @@ function build_tree(p::AdaOPSPlanner, b_0)
     trial = 1
     start = CPUtime_us()
 
+    Depth = sizehint!(Int[], 2000)
     while D.u[1]-D.l[1] > p.sol.epsilon_0 &&
           CPUtime_us()-start < p.sol.T_max*1e6 &&
           trial <= p.sol.max_trials
-        explore!(D, 1, p, start)
+        push!(Depth, explore!(D, 1, p, start))
         trial += 1
     end
     if (CPUtime_us()-start)*1e-6 > p.sol.T_max*p.sol.overtime_warning_threshold
-        @warn ```Surpass the time limit. The actual runtime is $((CPUtime_us()-start)*1e-6)s 
-                 delta=$(p.sol.delta) 
-                 zeta=$(p.sol.zeta) 
-                 m_init=$(p.sol.m_init) 
-                 sigma=$(p.sol.sigma) 
-                 grid=$(typeof(p.sol.grid)) 
-                 bounds=$(typeof(p.sol.bounds))
-                 ```
+        @warn(@sprintf("Surpass the time limit. The actual runtime is %3.1fs, 
+        delta=%4.2f, zeta=%4.2f, m_init=%3d, sigma=%4.2f, grid=%s, bounds=%s",
+        (CPUtime_us()-start)*1e-6, p.sol.delta, p.sol.zeta, p.sol.m_init, p.sol.sigma, typeof(p.sol.grid), typeof(p.sol.bounds)))
     end
-    return D
+    return D, Depth
 end
 
-function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt64)
+function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt)
     while D.Delta[b] < p.sol.D &&
         CPUtime_us()-start < p.sol.T_max*1e6
         if isempty(D.children[b]) # a leaf
-            Δu, Δl = expand!(D, b, p)
-            if backup!(D, b, p, Δu, Δl) || excess_uncertainty(D, b, p) <= 0.0
+            Δl, Δu = expand!(D, b, p)
+            if backup!(D, b, p, Δl, Δu) || excess_uncertainty(D, b, p) <= 0.0
                 break
             end
         end
@@ -38,10 +34,10 @@ function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt64)
         backup!(D, b, p, -D.u[b], -D.l[b])
     end
 
-    return nothing
+    return D.Delta[b]
 end
 
-function backup!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, Δu::Float64, Δl::Float64)
+function backup!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, Δl::Float64, Δu::Float64)
     D.u[b] += Δu
     D.l[b] += Δl
     best_a_change = false

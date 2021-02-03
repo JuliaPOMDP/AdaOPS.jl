@@ -24,10 +24,9 @@ s0 = rand(b0)
 bound = AdaOPS.IndependentBounds(FORollout(move_east), map[2]*10.0, check_terminal=true, consistency_fix_thresh=1e-5)
 
 solver = AdaOPSSolver(bounds=bound,
-                        delta=1.0,
-                        zeta=0.01,
-                        m_init=15,
-                        sigma=2.0,
+                        delta=0.3,
+                        m_init=30,
+                        sigma=3.0,
                         bounds_warnings=true,
                         default_action=move_east,
                         tree_in_info=true
@@ -36,9 +35,10 @@ solver = AdaOPSSolver(bounds=bound,
 adaops = solve(solver, m)
 @time action(adaops, b0)
 # show(stdout, MIME("text/plain"), info[:tree])
-D, extra_info = build_tree_test(adaops, b0)
-show(stdout, MIME("text/plain"), D)
-extra_info_analysis(D, extra_info)
+a, info = action_info(adaops, b0)
+info_analysis(info)
 
 num_particles = 30000
-@show r = simulate(RolloutSimulator(), m, adaops, SIRParticleFilter(m, num_particles), b0, s0)
+hist = simulate(HistoryRecorder(max_steps=90), m, adaops, SIRParticleFilter(m, num_particles), b0, s0)
+hist_analysis(hist)
+@show undiscounted_reward(hist)

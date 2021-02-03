@@ -15,12 +15,16 @@ include("independent_bounds.jl")
 
 pomdp = BabyPOMDP()
 pomdp.discount = 1.0
+p = solve(AdaOPSSolver(), pomdp)
 
 K = 10
 b_0 = initialstate(pomdp)
 o = false
 tval = 7.0
-b = WPFBelief([rand(b_0)], [1.0], o)
+tree = AdaOPSTree(p, b0)
+tree.obs[1] = o
+b = WPFBelief([rand(b_0)], [1.0], 1, 0, tree, o)
+
 pol = FeedWhenCrying()
 rng = MersenneTwister(2)
 
@@ -41,7 +45,6 @@ rng = MersenneTwister(2)
     @test weight_sum(b) == 1.0
     @test weight(b, 1) == 1.0
     @test currentobs(b) == o
-    @test_deprecated previous_obs(b)
     @test history(b)[end].o == o
 end
 
@@ -61,44 +64,43 @@ solver = AdaOPSSolver(bounds=bds,
 p = solve(solver, pomdp)
 
 b0 = initialstate(pomdp)
-D = @inferred AdaOPS.build_tree(p, b0)
-D, extra_info = build_tree_test(p, b0)
-extra_info_analysis(D, extra_info)
+D, Depth = @inferred AdaOPS.build_tree(p, b0)
+a, info = @inferred action_info(p, b0)
+info_analysis(info)
 @inferred AdaOPS.explore!(D, 1, p, CPUtime_us())
-Δu, Δl = @inferred AdaOPS.expand!(D, D.b_len, p)
+Δu, Δl = @inferred AdaOPS.expand!(D, D.b, p)
 @inferred AdaOPS.backup!(D, 1, p, Δu, Δl)
 @inferred AdaOPS.next_best(D, 1, p)
 @inferred AdaOPS.excess_uncertainty(D, 1, p)
 @inferred action(p, b0)
 
-# visualization
-a, info = action_info(p, initialstate(pomdp))
-show(stdout, MIME("text/plain"), info[:tree])
-
 pomdp = BabyPOMDP()
 
 # constant bounds
-bds = (reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
-solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=grid, sigma=3)
+bds = IndependentBounds(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
+solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=grid, sigma=3, tree_in_info=true)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=50)
 @time hist = simulate(hr, pomdp, planner)
+hist_analysis(hist)
 println("Discounted reward is $(discounted_reward(hist))")
 
 # FO policy lower bound
 bds = IndependentBounds(SemiPORollout(FeedWhenCrying()), 0.0)
-solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=grid, sigma=3)
+solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=grid, sigma=3, tree_in_info=false)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=50)
 @time hist = simulate(hr, pomdp, planner)
+hist_analysis(hist)
 println("Discounted reward is $(discounted_reward(hist))")
 
 # PO policy lower bound
 bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
-solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=nothing)
+solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, tree_in_info=false)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=50)
 @time hist = simulate(hr, pomdp, planner)
+hist_analysis(hist)
 println("Discounted reward is $(discounted_reward(hist))")
 
 # from README:
@@ -106,7 +108,7 @@ using POMDPs, POMDPModels, POMDPSimulators, AdaOPS
 
 pomdp = TigerPOMDP()
 
-solver = AdaOPSSolver(bounds=(-20.0, 0.0), zeta=0.04)
+solver = AdaOPSSolver(bounds=IndependentBounds(-20.0, 0.0, check_terminal=true), zeta=0.04)
 planner = solve(solver, pomdp)
 
 for (s, a, o) in stepthrough(pomdp, planner, "s,a,o", max_steps=10)

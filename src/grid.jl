@@ -4,7 +4,7 @@ mutable struct StateGrid{D}
     cutPoints::Vector{Vector{Float64}}
 
     function StateGrid{D}(convert, cutPoints...) where D
-        newCutPoints = Array{Vector{Float64}}(undef, length(cutPoints))
+        newCutPoints = Vector{Vector{Float64}}(undef, length(cutPoints))
         for i = 1:D
             if length(Set(cutPoints[i])) != length(cutPoints[i])
                 error(@sprintf("Duplicates cutpoints are not allowed (duplicates observed in dimension %d)",i))
@@ -18,19 +18,19 @@ mutable struct StateGrid{D}
     end
 end
 StateGrid(convert, cutPoints...) = StateGrid{Base.length(cutPoints)}(convert, cutPoints...)
-length(grid::StateGrid) = Base.length(grid.cutPoints)
+Base.length(grid::StateGrid{D}) where D = D
 
-zeros_like(grid::StateGrid) = zeros(Int, [length(points)+1 for points in grid.cutPoints]...)
+zeros_like(grid::StateGrid{D}) where D = zeros(Int, NTuple{D, Int}(length(points)+1 for points in grid.cutPoints))
 
-function access(grid::StateGrid, access_cnt::Array, s, pomdp::POMDP)
-    s = grid.convert(s, pomdp)::AbstractVector
-    ind = zeros(Int64, length(grid.cutPoints))
-    for d in 1:length(grid.cutPoints)
+function access(grid::StateGrid{D}, access_cnt::Array{Int,D}, s::S, pomdp::POMDP{S}) where {S,D}
+    s = grid.convert(s, pomdp)::AbstractVector{Float64}
+    ind = zeros(Int, D)
+    for d in 1:D
         cutPoints = grid.cutPoints[d]
         # Binary search for the apt grid
         start_ind = 1
         end_ind = length(cutPoints) + 1
-        mid_ind = floor(Int64, (start_ind+end_ind)/2)
+        mid_ind = div(start_ind+end_ind, 2)
         while start_ind < end_ind
             cutPoint = cutPoints[mid_ind]
             if s[d] < cutPoint
@@ -38,7 +38,7 @@ function access(grid::StateGrid, access_cnt::Array, s, pomdp::POMDP)
             else
                 start_ind = mid_ind + 1
             end
-            mid_ind = floor(Int64, (start_ind+end_ind)/2)
+            mid_ind = div(start_ind+end_ind, 2)
         end
         ind[d] = mid_ind
     end

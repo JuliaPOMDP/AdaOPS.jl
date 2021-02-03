@@ -1,4 +1,4 @@
-The PMCP.jl package is modified based ARDESPOT.jl which is licensed under the MIT "Expat" License:
+The AdaOPS.jl package is modified on basis of ARDESPOT.jl which is licensed under the MIT "Expat" License:
 
 > Copyright (c) 2017: Zachary Sunberg.
 >
