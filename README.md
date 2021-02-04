@@ -10,7 +10,7 @@ If you are trying to use this package and require more documentation, please fil
 using Pkg
 pkg> add "POMDPs"
 pkg> registry add "https://github.com/JuliaPOMDP/Registry.git"
-pkg> add "git@github.com:AutomobilePOMDP/AdaOPS.jl.git"
+pkg> add "git@github.com:LAMDA-POMDP/AdaOPS.jl.git"
 ```
 
 ## Usage
