@@ -161,7 +161,7 @@ function gen_packing!(D::AdaOPSTree{S,A,O}, P::Vector{S}, belief::WeightedPartic
         # check if the observation is already covered by the packing
         norm_w = p.norm_w[next_obs]
         norm_w .= w′ ./ sum(w′)
-        obs_ind = in_packing(norm_w, view(p.norm_w, 1:(next_obs-1)), p.sol.delta)
+        obs_ind = in_packing(norm_w, view(p.norm_w, 1:(next_obs-1)), p.delta)
         if obs_ind !== 0
             # merge new obs into existing obs
             p.obs_w[obs_ind] += p.obs_w[i]
@@ -207,7 +207,7 @@ end
 
 function propagate_particles(D::AdaOPSTree{S,A,O}, belief::WeightedParticleBelief{S}, a::A, resampled::Bool, p::AdaOPSPlanner{S,A,O,M,N}) where {S,A,O,M<:POMDP{S,A,O},N}
     m_min = p.sol.m_init
-    m_max = ceil(Int, p.sol.sigma * p.sol.m_init)
+    m_max = n_particles(belief)
 
     Φ = particles(belief)
     P = D.ba_particles[D.ba+1]
@@ -215,7 +215,7 @@ function propagate_particles(D::AdaOPSTree{S,A,O}, belief::WeightedParticleBelie
     Rsum = 0.0
     k = 0 # number of multidimensional bins
     n = 0 # number of used particles
-    m = N === 0 ? m_max : m_min # number of needed particles
+    m = (N === 0 || !resampled) ? m_max : m_min # number of needed particles
     while n < m
         for i in (n+1):m
             w = weight(belief, i)

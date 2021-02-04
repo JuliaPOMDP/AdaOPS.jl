@@ -136,7 +136,7 @@ Further information can be found in the field docstrings (e.g.
     overtime_warning_threshold::Float64     = 2.0
 
     "Number of pre-allocated belief nodes"
-    num_b::Int                              = 200_000
+    num_b::Int                              = 50_000
 end
 
 mutable struct AdaOPSTree{S,A,O,RB}
@@ -168,6 +168,7 @@ mutable struct AdaOPSPlanner{S, A, O, P<:POMDP{S,A,O}, N, B, RNG<:AbstractRNG} <
     sol::AdaOPSSolver{N}
     pomdp::P
     bounds::B
+    delta::Float64
     xi::Float64
     max_depth::Int
     Deff_thres::Float64
@@ -195,7 +196,7 @@ function AdaOPSPlanner(sol::AdaOPSSolver{N}, pomdp::POMDP{S,A,O}) where {S,A,O,N
     m_max = ceil(Int, sol.sigma * m_min)
     access_cnt = sol.grid !== nothing ? zeros_like(sol.grid) : Int[]
     norm_w = Vector{Float64}[Vector{Float64}(undef, m_min) for i in 1:m_max]
-    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, sol.xi, sol.max_depth, sol.Deff_thres, discounts, rng, 
+    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, sol.delta, sol.xi, sol.max_depth, sol.Deff_thres, discounts, rng, 
                         WeightedParticleBelief(Vector{S}(undef, m_max), ones(m_max), m_max), sizehint!(O[], m_max),
                         Dict{O, Int}(), sizehint!(Vector{Float64}[], m_max), norm_w, access_cnt,
                         sizehint!(Float64[], m_max), sizehint!(Float64[], m_max), sizehint!(Float64[], m_max),
