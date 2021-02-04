@@ -8,7 +8,7 @@ using Random
 using POMDPModelTools
 using ParticleFilters
 using BeliefUpdaters
-using CPUTime
+using StaticArrays
 
 include("rocksample_test.jl")
 include("independent_bounds.jl")
@@ -48,8 +48,8 @@ rng = MersenneTwister(2)
     @test history(b)[end].o == o
 end
 
-convert(s::Bool, pomdp::BabyPOMDP) = Float64[s]
-grid = StateGrid(convert, [1.0])
+Base.convert(::Type{SVector{1,Float64}}, s::Bool) = SVector{1,Float64}(s)
+grid = StateGrid([1.0])
 # Type stability
 pomdp = BabyPOMDP()
 bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
@@ -65,9 +65,10 @@ p = solve(solver, pomdp)
 
 b0 = initialstate(pomdp)
 D, Depth = @inferred AdaOPS.build_tree(p, b0)
-a, info = @inferred action_info(p, b0)
+@inferred action_info(p, b0)
+a, info = action_info(p, b0)
 info_analysis(info)
-@inferred AdaOPS.explore!(D, 1, p, CPUtime_us())
+@inferred AdaOPS.explore!(D, 1, p)
 Δu, Δl = @inferred AdaOPS.expand!(D, D.b, p)
 @inferred AdaOPS.backup!(D, 1, p, Δu, Δl)
 @inferred AdaOPS.next_best(D, 1, p)
@@ -78,7 +79,7 @@ pomdp = BabyPOMDP()
 
 # constant bounds
 bds = IndependentBounds(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
-solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=grid, sigma=3, tree_in_info=true)
+solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=grid, sigma=3, tree_in_info=false, num_b=10_000)
 planner = solve(solver, pomdp)
 hr = HistoryRecorder(max_steps=50)
 @time hist = simulate(hr, pomdp, planner)

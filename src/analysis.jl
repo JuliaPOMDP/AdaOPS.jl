@@ -29,7 +29,7 @@ function hist_analysis(hist::H) where H<:AbstractSimHistory
         push!(mean_d, mean(depth))
         push!(std_d, std(depth))
     end
-    p1 = plot(mean_d, ribbon=(mean_d.-std_d, mean_d.+std_d), xaxis="Steps", yaxis="Depth of exploration")
+    p1 = plot(mean_d, ribbon=(mean_d.-std_d, mean_d.+std_d), xaxis="Steps", yaxis="Depth of exploration", legend=false)
 
     D = get(first(infos), :tree, nothing)
     if D === nothing
@@ -43,6 +43,7 @@ function hist_analysis(hist::H) where H<:AbstractSimHistory
         std_branch = Float64[]
 
         for info in infos
+            D = info[:tree]
             push!(num_anode, D.ba)
             push!(num_bnode, D.b)
             m = length.(view(D.ba_particles, 1:D.ba))
@@ -52,9 +53,9 @@ function hist_analysis(hist::H) where H<:AbstractSimHistory
             push!(mean_branch, mean(branch))
             push!(std_branch, std(branch))
         end
-        p2 = plot(hcat(num_anode,num_bnode), label=["Action nodes", "Belief nodes"], xaxis="Steps", yaxis="Number of nodes expanded")
-        p3 = plot(mean_m, ribbon=(mean_m.-std_m, mean_m.+std_m), xaxis="Steps", yaxis="Number of particles used")
-        p4 = plot(mean_branch, ribbon=(mean_branch.-std_branch, mean_branch.+std_branch), xaxis="Steps", yaxis="Number of observation branches")
+        p2 = plot(hcat(num_anode,num_bnode), label=["Action" "Belief"], xaxis="Steps", yaxis="Nodes expanded")
+        p3 = plot(mean_m, ribbon=(mean_m.-std_m, mean_m.+std_m), xaxis="Steps", yaxis="Avg. particles", legend=false)
+        p4 = plot(mean_branch, ribbon=(mean_branch.-std_branch, mean_branch.+std_branch), xaxis="Steps", yaxis="Avg. Obs.", legend=false)
         display(plot(p1, p2, p3, p4, layout = (2, 2)))
     end
     return nothing

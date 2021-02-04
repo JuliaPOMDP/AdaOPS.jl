@@ -40,22 +40,20 @@ Solver options can be found in the `AdaOPSSolver` docstring and accessed using [
 The core idea of the adaptive particle filter is that it can change the number of particles adaptively and use more particles to estimate the belief when needed.
 #### zeta
 zeta is the targe error when estimating a belief. Spcifically, when we use KLD Sampling to calculate the number of particles needed, zeta is the targe Kullback-Leibler divergence between the estimated belief and the true belief.
-#### MESS
-MESS is a function for computing the number of particles needed for estimating a belief with an error of zeta. By default, the KLD Sampling method is used.
 ##### grid
 In order to estimate the belief, we first need know how many slices a belief is consist of. Therefore, we should first implement a function to convert a state to a multidimensional vector,
-`convert(::S,::P)`.
+`Base.convert(::SVector{D, Float64},::S)`, where `D` is the dimension of the resulted vector.
 Then, we define a StateGrid to discretize or split the state space.
-A StateGrid is consist of an arrays of cutpoints in each dimension. These cutpoints divide the whole space into small tiles. In each dimension, a number of intervals constitute the grid, and each of these intervals is left-closed and right-open with the endpoints be cutpoints.
-For example, a StateGrid can be defined as `StateGrid(convert, [dim1_cutpoints], [dim2_cutpoints], [dim3_cutpoints])`.
+A StateGrid is consist of an arrays of cutpoints in each dimension. These cutpoints divide the whole space into small tiles. In each dimension, a number of intervals constitute the grid, and each of these intervals is left-closed and right-open with the endpoints be cutpoints with the exception of the left-most interval.
+For example, a StateGrid can be defined as `StateGrid([dim1_cutpoints], [dim2_cutpoints], [dim3_cutpoints])`.
 All states lie in one tile will be taken as the same.
-With the number of tiles that a belief occupies, we can estimate the number of particles needed to estimate it.
+With the number of tiles occupied, we can estimate the number of particles using KLD-Sampling.
 #### sigma
 `sigma` is the maximum times of `m_init` particles we can afford to estimate a belief. Since `AdaOPS` is an online planning algorithm, we must balance between the accuracy and the speed.
 
-### Packing
+### Belief Packing
 #### delta
-A delta-packing of observation branches will be generated, i.e., the belief nodes with L1 distance less than delta are merged.
+A δ-packing of observation branches will be generated, i.e., the belief nodes with L1 distance less than delta are merged.
 #### m_init
 `m_init` is the least number of particles needed to estimate a belief. Only when a belief is consist of at least `m_init`, we can estimate the L1 distance between observation branches and merge the similar ones.
 ### Bounds
@@ -64,7 +62,6 @@ A delta-packing of observation branches will be generated, i.e., the belief node
 The bound passed into `AdaOPSSolver` can be a function in the form of `lower_bound, upper_bound = f(pomdp, wpf_belief)`, or any other objects for which a `bounds` function is implemented.
 
 #### Independent bounds
-
 In most cases, the recommended way to specify bounds is with an `IndependentBounds` object, i.e.
 ```julia
 AdaOPSSolver(bounds=IndependentBounds(lower, upper))
@@ -120,6 +117,53 @@ b0 = initialstate(pomdp)
 
 a, info = action_info(planner, b0)
 inchrome(D3Tree(info[:tree], init_expand=5))
-info_analysis(info)
 ```
-will create an interactive tree that looks like this:
+will create an interactive tree.
+
+## Analysis
+Two utilities, namely `info_analysis` and `hist_analysis`, are provided for getting a sense of how the algorithm is working.
+`info_analysis` takes the infomation returned from `action_info(planner, b0)`. It will first visualize the tree if the `tree_in_info` option is turned on. Then it will show stats such as number nodes expanded, total explorations, average observation branches, and so on. `hist_analysis` takes the `hist` from `HistoryRecorder` simulator. It will show similar stats as `info_analysis` but in the form of figures. It should be noted that `HistoryRecoder` will store the tree of each single step, which makes it memory-intensive. An example is shown as follows.
+```julia
+using POMDPs, AdaOPS, RockSample, POMDPSimulators, ParticleFilters, POMDPModelTools
+
+function rsgen(map)
+    possible_ps = [(i, j) for i in 1:map[1], j in 1:map[1]]
+    selected = unique(rand(possible_ps, map[2]))
+    while length(selected) != map[2]
+        push!(selected, rand(possible_ps))
+        selected = unique!(selected)
+    end
+    return RockSamplePOMDP(map_size=(map[1],map[1]), rocks_positions=selected)
+end
+
+struct MoveEast<:Policy end
+POMDPs.action(p::MoveEast, b) = 2
+move_east = MoveEast()
+
+map = (11, 11)
+m = rsgen(map)
+
+b0 = initialstate(m)
+s0 = rand(b0)
+
+bound = AdaOPS.IndependentBounds(FORollout(move_east), map[2]*10.0, check_terminal=true, consistency_fix_thresh=1e-5)
+
+solver = AdaOPSSolver(bounds=bound,
+                        delta=0.3,
+                        m_init=30,
+                        sigma=3.0,
+                        bounds_warnings=true,
+                        default_action=move_east,
+                        tree_in_info=true,
+                        num_b=10_000
+                        )
+
+adaops = solve(solver, m)
+a, info = action_info(adaops, b0)
+info_analysis(info)
+
+num_particles = 30000
+@time hist = simulate(HistoryRecorder(max_steps=90), m, adaops, SIRParticleFilter(m, num_particles), b0, s0)
+hist_analysis(hist)
+@show undiscounted_reward(hist)
+```

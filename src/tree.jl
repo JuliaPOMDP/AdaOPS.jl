@@ -1,28 +1,50 @@
-function AdaOPSTree(p::AdaOPSPlanner{S,A,O,M}, b0::RB, num_b::Int = 50_000) where {S,A,O,M<:POMDP{S,A,O},RB}
+function AdaOPSTree(p::AdaOPSPlanner{S,A,O,M}, b0::RB) where {S,A,O,M<:POMDP{S,A,O},RB}
+    num_b = p.sol.num_b
+    num_ba = num_b
     num_a = length(actions(p.pomdp))
-    num_ba = div(num_b, num_a)
+    m_max = ceil(Int, p.sol.sigma * p.sol.m_init)
 
-    return AdaOPSTree(sizehint!([Float64[]], num_b),
-                    sizehint!([Int[]], num_b),
-                    sizehint!([0], num_b),
-                    sizehint!([0], num_b),
-                    sizehint!([10000.0], num_b),
-                    sizehint!([-10000.0], num_b),
-                    sizehint!(Vector{O}(undef, 1), num_b),
-                    sizehint!([1.0], num_b),
+    if p.sol.tree_in_info || p.tree === nothing || typeof(p.tree.root_belief) !== RB
+        tree = AdaOPSTree([Float64[]],
+                        [sizehint!(Int[], num_a)],
+                        [0],
+                        [0],
+                        [10000.0],
+                        [-10000.0],
+                        Vector{O}(undef, 1),
+                        [1.0],
 
-                    sizehint!(Vector{S}[], num_ba),
-                    sizehint!(Vector{Int}[], num_ba),
-                    sizehint!(Int[], num_ba),
-                    sizehint!(Float64[], num_ba),
-                    sizehint!(Float64[], num_ba),
-                    sizehint!(Float64[], num_ba),
-                    sizehint!(A[], num_ba),
+                        Vector{S}[],
+                        Vector{Int}[],
+                        Int[],
+                        Float64[],
+                        Float64[],
+                        Float64[],
+                        A[],
 
-                    b0,
-                    1,
-                    0
-                 )
+                        b0,
+                        1,
+                        0
+                    )
+        resize_b!(tree, num_b, m_max, num_a)
+        resize_ba!(tree, num_ba, m_max)
+    else
+        tree = p.tree
+        reset!(tree, b0)
+    end
+    return tree::AdaOPSTree{S,A,O,RB}
+end
+
+function reset!(tree::AdaOPSTree{S,A,O,RB}, b0::RB) where {S,A,O,RB}
+    empty!.(view(tree.weights, 1:tree.b))
+    empty!.(view(tree.children, 1:tree.b))
+    empty!.(view(tree.ba_particles, 1:tree.ba))
+    empty!.(view(tree.ba_children, 1:tree.ba))
+    tree.u[1] = 10000.0
+    tree.l[1] = -10000.0
+    tree.b = 1
+    tree.ba = 0
+    return nothing
 end
 
 function expand!(D::AdaOPSTree{S,A,O,RB}, b::Int, p::AdaOPSPlanner{S,A,O,M}) where {S,A,O,M<:POMDP{S,A,O},RB}
@@ -46,7 +68,7 @@ function expand!(D::AdaOPSTree{S,A,O,RB}, b::Int, p::AdaOPSPlanner{S,A,O,M}) whe
         n_obs = length(p.w) # number of new obs
         fbp = D.b + 1 # first bp
         lbp = D.b + n_obs # last bp
-        w_sum = sum(weights(belief)[1:m_max]) # calculate the weight sum of particles used
+        w_sum = sum(view(weights(belief), 1:m_max)) # calculate the weight sum of particles used
 
         # initialize the new action branch
         resize!(D.ba_children[D.ba], n_obs)
@@ -61,7 +83,7 @@ function expand!(D::AdaOPSTree{S,A,O,RB}, b::Int, p::AdaOPSPlanner{S,A,O,M}) whe
         b′ = WPFBelief(P, first(p.w), 1.0, fbp, D.Delta[b] + 1, D, first(p.obs))
         resize!(p.u, n_obs)
         resize!(p.l, n_obs)
-        bounds!(p.l, p.u, p.bounds, p.pomdp, b′, p.w, p.obs, p.sol.D, p.sol.bounds_warnings)
+        bounds!(p.l, p.u, p.bounds, p.pomdp, b′, p.w, p.obs, p.max_depth, p.sol.bounds_warnings)
 
         # initialize new obs branches
         view(D.weights, fbp:lbp) .= p.w
@@ -104,7 +126,7 @@ function get_belief(D::AdaOPSTree{S,A,O,RB}, b::Int, p::AdaOPSPlanner{S,A,O,M}) 
         if w_sum === 0.0
             return WeightedParticleBelief(P, W, w_sum)::WeightedParticleBelief{S}, true
         end
-        resampled = DesignEffect(D, b) > p.sol.Deff_thres
+        resampled = DesignEffect(D, b) > p.Deff_thres
         if resampled
             belief = resample!(p.resampled, WeightedParticleBelief(P, W, w_sum), p.rng)
         else
@@ -218,7 +240,7 @@ function propagate_particles(D::AdaOPSTree{S,A,O}, belief::WeightedParticleBelie
         end
         n = m
         if N !== 0
-            m = min(m_max, ceil(Int, p.sol.MESS(k, p.sol.zeta)::Float64))
+            m = min(m_max, ceil(Int, KLDSampleSize(k, p.sol.zeta)))
         end
     end
     return P, Rsum

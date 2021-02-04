@@ -1,5 +1,4 @@
-using POMDPPolicies
-using RockSample
+using POMDPs, POMDPModelTools, AdaOPS, RockSample, POMDPSimulators
 
 function rsgen(map)
     possible_ps = [(i, j) for i in 1:map[1], j in 1:map[1]]
@@ -29,16 +28,16 @@ solver = AdaOPSSolver(bounds=bound,
                         sigma=3.0,
                         bounds_warnings=true,
                         default_action=move_east,
-                        tree_in_info=true
+                        tree_in_info=true,
+                        num_b=30_000
                         )
 
 adaops = solve(solver, m)
 @time action(adaops, b0)
-# show(stdout, MIME("text/plain"), info[:tree])
 a, info = action_info(adaops, b0)
 info_analysis(info)
 
 num_particles = 30000
-hist = simulate(HistoryRecorder(max_steps=90), m, adaops, SIRParticleFilter(m, num_particles), b0, s0)
+@time hist = simulate(HistoryRecorder(max_steps=90), m, adaops, SIRParticleFilter(m, num_particles), b0, s0)
 hist_analysis(hist)
 @show undiscounted_reward(hist)

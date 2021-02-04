@@ -1,7 +1,7 @@
 name = "AdaOPS"
 uuid = "eadfb9d8-44f1-454c-a5eb-0663ee7d74a1"
 repo = "git@github.com:AutomobilePOMDP/AdaOPS.jl.git"
-version = "0.3.0"
+version = "0.3.1"
 
 [deps]
 BasicPOMCP = "d721219e-3fc6-5570-a8ef-e5402f47c49e"
@@ -21,6 +21,7 @@ ParticleFilters = "c8b314e2-9260-5cf8-ae76-3be7461ca6d0"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
@@ -36,8 +37,9 @@ julia = "1"
 
 [extras]
 POMDPModels = "355abbd5-f08e-5560-ac9e-8b5f2592a0ca"
+ProfileView = "c46f51b8-102a-5cf2-8d2c-8597cb0e0da7"
 RockSample = "de008ff0-c357-11e8-3329-7fe746fe836e"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "POMDPModels", "RockSample"]
+test = ["Test", "POMDPModels", "ProfileView", "RockSample"]

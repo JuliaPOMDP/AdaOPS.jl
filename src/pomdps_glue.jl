@@ -8,6 +8,8 @@ function POMDPModelTools.action_info(p::AdaOPSPlanner{S,A}, b) where {S,A}
         info[:depth] = Depth
         if p.sol.tree_in_info
             info[:tree] = D
+        else
+            p.tree = D
         end
 
         best_l = -Inf

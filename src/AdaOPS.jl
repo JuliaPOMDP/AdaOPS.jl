@@ -14,6 +14,7 @@ using POMDPPolicies
 using POMDPLinter
 using LinearAlgebra
 using Statistics
+using StaticArrays
 using Distributions
 using Plots
 
@@ -79,7 +80,7 @@ parameters match the definitions in the paper exactly.
 Further information can be found in the field docstrings (e.g.
 `?AdaOPSSolver.xi`)
 """
-@with_kw mutable struct AdaOPSSolver{N, R<:AbstractRNG} <: Solver
+@with_kw struct AdaOPSSolver{N, R<:AbstractRNG} <: Solver
     "The target gap between the upper and the lower bound at the root of the AdaOPS tree."
     epsilon_0::Float64                      = 0.0
 
@@ -93,7 +94,7 @@ Further information can be found in the field docstrings (e.g.
     xi::Float64                             = 0.95
 
     "State grid for adaptive particle filters"
-    grid::StateGrid{N}                      = StateGrid(()->(),)
+    grid::StateGrid{N}                      = StateGrid()
 
     "The initial number of particles at root."
     m_init::Int                             = 30
@@ -101,14 +102,11 @@ Further information can be found in the field docstrings (e.g.
     "At most sigma times of m_init particles are allowed for estimating a belief."
     sigma::Float64                          = 1.0
 
-    "Return the minimum effective sample size needed for accurate estimation"
-    MESS::Function                          = KLDSampleSize
-
     "Resample when the design effect of a belief node exceed Deff_thres"
     Deff_thres::Float64                     = 2.0
 
-    "The maximum depth of the DESPOT."
-    D::Int                                  = 90
+    "The maximum depth of the belief tree."
+    max_depth::Int                          = 90
 
     "The maximum online planning time per step."
     T_max::Float64                          = 1.0
@@ -136,39 +134,9 @@ Further information can be found in the field docstrings (e.g.
 
     "Issue an warning when the planning time surpass the time limit by `over_time_warning_threshold` times"
     overtime_warning_threshold::Float64     = 2.0
-end
 
-struct AdaOPSPlanner{S, A, O, P<:POMDP{S,A,O}, N, B, RNG<:AbstractRNG} <: Policy
-    sol::AdaOPSSolver{N}
-    pomdp::P
-    bounds::B
-    discounts::Vector{Float64}
-    rng::RNG
-    # The following attributes are used to avoid reallocating memory
-    resampled::WeightedParticleBelief{S}
-    obs::Vector{O}
-    obs_ind_dict::Dict{O, Int}
-    w::Vector{Vector{Float64}}
-    norm_w::Vector{Vector{Float64}}
-    access_cnt::Array{Int, N}
-    obs_w::Vector{Float64}
-    u::Vector{Float64}
-    l::Vector{Float64}
-end
-
-function AdaOPSPlanner(sol::AdaOPSSolver{N}, pomdp::POMDP{S,A,O}) where {S,A,O,N}
-    rng = deepcopy(sol.rng)
-    bounds = init_bounds(sol.bounds, pomdp, sol, rng)
-    discounts = discount(pomdp) .^[0:(sol.D+1);]
-
-    m_min = sol.m_init
-    m_max = ceil(Int, sol.sigma * m_min)
-    access_cnt = sol.grid !== nothing ? zeros_like(sol.grid) : Int[]
-    norm_w = Vector{Float64}[Vector{Float64}(undef, m_min) for i in 1:m_max]
-    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, 
-                        WeightedParticleBelief(Vector{S}(undef, m_max), ones(m_max), m_max), sizehint!(O[], m_max),
-                        Dict{O, Int}(), sizehint!(Vector{Float64}[], m_max), norm_w, access_cnt,
-                        sizehint!(Float64[], m_max), sizehint!(Float64[], m_max), sizehint!(Float64[], m_max))
+    "Number of pre-allocated belief nodes"
+    num_b::Int                              = 200_000
 end
 
 mutable struct AdaOPSTree{S,A,O,RB}
@@ -194,6 +162,44 @@ mutable struct AdaOPSTree{S,A,O,RB}
     root_belief::RB
     b::Int
     ba::Int
+end
+
+mutable struct AdaOPSPlanner{S, A, O, P<:POMDP{S,A,O}, N, B, RNG<:AbstractRNG} <: Policy
+    sol::AdaOPSSolver{N}
+    pomdp::P
+    bounds::B
+    xi::Float64
+    max_depth::Int
+    Deff_thres::Float64
+    discounts::Vector{Float64}
+    rng::RNG
+    # The following attributes are used to avoid reallocating memory
+    resampled::WeightedParticleBelief{S}
+    obs::Vector{O}
+    obs_ind_dict::Dict{O, Int}
+    w::Vector{Vector{Float64}}
+    norm_w::Vector{Vector{Float64}}
+    access_cnt::Array{Int, N}
+    obs_w::Vector{Float64}
+    u::Vector{Float64}
+    l::Vector{Float64}
+    tree::Union{Nothing, AdaOPSTree{S,A,O}}
+end
+
+function AdaOPSPlanner(sol::AdaOPSSolver{N}, pomdp::POMDP{S,A,O}) where {S,A,O,N}
+    rng = deepcopy(sol.rng)
+    bounds = init_bounds(sol.bounds, pomdp, sol, rng)
+    discounts = discount(pomdp) .^[0:(sol.max_depth+1);]
+
+    m_min = sol.m_init
+    m_max = ceil(Int, sol.sigma * m_min)
+    access_cnt = sol.grid !== nothing ? zeros_like(sol.grid) : Int[]
+    norm_w = Vector{Float64}[Vector{Float64}(undef, m_min) for i in 1:m_max]
+    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, sol.xi, sol.max_depth, sol.Deff_thres, discounts, rng, 
+                        WeightedParticleBelief(Vector{S}(undef, m_max), ones(m_max), m_max), sizehint!(O[], m_max),
+                        Dict{O, Int}(), sizehint!(Vector{Float64}[], m_max), norm_w, access_cnt,
+                        sizehint!(Float64[], m_max), sizehint!(Float64[], m_max), sizehint!(Float64[], m_max),
+                        nothing)
 end
 
 include("wpf_belief.jl")

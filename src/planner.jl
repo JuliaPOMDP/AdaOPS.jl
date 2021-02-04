@@ -8,7 +8,7 @@ function build_tree(p::AdaOPSPlanner, b_0)
     while D.u[1]-D.l[1] > p.sol.epsilon_0 &&
           CPUtime_us()-start < p.sol.T_max*1e6 &&
           trial <= p.sol.max_trials
-        push!(Depth, explore!(D, 1, p, start))
+        push!(Depth, explore!(D, 1, p))
         trial += 1
     end
     if (CPUtime_us()-start)*1e-6 > p.sol.T_max*p.sol.overtime_warning_threshold
@@ -19,9 +19,8 @@ function build_tree(p::AdaOPSPlanner, b_0)
     return D, Depth
 end
 
-function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt)
-    while D.Delta[b] < p.sol.D &&
-        CPUtime_us()-start < p.sol.T_max*1e6
+function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
+    while D.Delta[b] < p.max_depth
         if isempty(D.children[b]) # a leaf
             Δl, Δu = expand!(D, b, p)
             if backup!(D, b, p, Δl, Δu) || excess_uncertainty(D, b, p) <= 0.0
@@ -30,7 +29,7 @@ function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, start::UInt)
         end
         b = next_best(D, b, p)
     end
-    if D.Delta[b] == p.sol.D
+    if D.Delta[b] == p.max_depth
         backup!(D, b, p, -D.u[b], -D.l[b])
     end
 
@@ -71,10 +70,29 @@ function backup!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, Δl::Float64, Δu::Flo
 end
 
 function next_best(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    best_ba = D.children[b][argmax([D.ba_u[ba] for ba in D.children[b]])]
-    return D.ba_children[best_ba][argmax([excess_uncertainty(D, bp, p) for bp in D.ba_children[best_ba]])]
+    max_u = -Inf
+    best_ba = first(D.children[b])
+    for ba in D.children[b]
+        @inbounds if D.ba_u[ba] > max_u
+            max_u = D.ba_u[ba]
+            best_ba = ba
+        end
+    end
+
+    max_eu = -Inf
+    best_bp = first(D.ba_children[best_ba])
+    tolerated_gap = p.xi * max(D.u[1]-D.l[1], 0.0) / p.discounts[D.Delta[best_bp]+1]
+    for bp in D.ba_children[best_ba]
+        eu = D.obs_prob[bp] * (D.u[bp]-D.l[bp] - tolerated_gap)
+        if eu > max_eu
+            max_eu = eu
+            best_bp = bp
+        end
+    end
+
+    return best_bp
 end
 
 function excess_uncertainty(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    return D.obs_prob[b] * (D.u[b]-D.l[b] - p.sol.xi * max(D.u[1]-D.l[1], 0.0) / p.discounts[D.Delta[b]+1])
+    return D.obs_prob[b] * (D.u[b]-D.l[b] - p.xi * max(D.u[1]-D.l[1], 0.0) / p.discounts[D.Delta[b]+1])
 end

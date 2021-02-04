@@ -1,9 +1,9 @@
 import Base.length
 mutable struct StateGrid{D}
-    convert::Function
     cutPoints::Vector{Vector{Float64}}
+    indicies::Vector{Int}
 
-    function StateGrid{D}(convert, cutPoints...) where D
+    function StateGrid{D}(cutPoints...) where D
         newCutPoints = Vector{Vector{Float64}}(undef, length(cutPoints))
         for i = 1:D
             if length(Set(cutPoints[i])) != length(cutPoints[i])
@@ -14,17 +14,18 @@ mutable struct StateGrid{D}
             end
             newCutPoints[i] = cutPoints[i]
         end
-        return new(convert, newCutPoints)
+        indicies = cumprod([1; [length(points)+1 for points in newCutPoints[1:end-1]]...])
+        return new(newCutPoints, indicies)
     end
 end
-StateGrid(convert, cutPoints...) = StateGrid{Base.length(cutPoints)}(convert, cutPoints...)
+StateGrid(cutPoints...) = StateGrid{Base.length(cutPoints)}(cutPoints...)
 Base.length(grid::StateGrid{D}) where D = D
 
 zeros_like(grid::StateGrid{D}) where D = zeros(Int, NTuple{D, Int}(length(points)+1 for points in grid.cutPoints))
 
 function access(grid::StateGrid{D}, access_cnt::Array{Int,D}, s::S, pomdp::POMDP{S}) where {S,D}
-    s = grid.convert(s, pomdp)::AbstractVector{Float64}
-    ind = zeros(Int, D)
+    s = convert(SVector{D,Float64}, s)
+    index = 1
     for d in 1:D
         cutPoints = grid.cutPoints[d]
         # Binary search for the apt grid
@@ -40,8 +41,8 @@ function access(grid::StateGrid{D}, access_cnt::Array{Int,D}, s::S, pomdp::POMDP
             end
             mid_ind = div(start_ind+end_ind, 2)
         end
-        ind[d] = mid_ind
+        index += (mid_ind-1) * grid.indicies[d]
     end
-    access_cnt[ind...] += 1
-    return access_cnt[ind...] == 1 ? true : false
+    access_cnt[index] += 1
+    return access_cnt[index] == 1 ? true : false
 end
