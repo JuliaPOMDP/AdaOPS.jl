@@ -19,17 +19,25 @@ function info_analysis(info::Dict)
 end
 
 function hist_analysis(hist::H) where H<:AbstractSimHistory
-    theme(:wong)
     infos = ainfo_hist(hist)
 
+    median_d = Float64[]
+    lower_d = Float64[]
+    upper_d = Float64[]
     mean_d = Float64[]
     std_d = Float64[]
+
     for info in infos
         depth = info[:depth]
+        l_d, m_d, u_d = quantile(depth, (0.1, 0.5, 0.9))
+        push!(median_d, m_d)
+        push!(lower_d, m_d-l_d)
+        push!(upper_d, u_d-m_d)
         push!(mean_d, mean(depth))
         push!(std_d, std(depth))
     end
-    p1 = plot(mean_d, ribbon=std_d, xaxis="Steps", yaxis="Depth of exploration", legend=false)
+    p1 = plot(median_d, ribbon=(lower_d, upper_d), xaxis="Steps", yaxis="Depth of exploration", label="quantile")
+    plot!(p1, mean_d, ribbon=std_d, label="mean", legend=:best)
 
     D = get(first(infos), :tree, nothing)
     if D === nothing
@@ -37,8 +45,16 @@ function hist_analysis(hist::H) where H<:AbstractSimHistory
     else
         num_anode = Int[]
         num_bnode = Int[]
+
+        median_m = Int[]
+        lower_m = Int[] # lower quantile
+        upper_m = Int[] # upper quantile
         mean_m = Float64[]
         std_m = Float64[]
+
+        median_branch = Int[]
+        lower_branch = Int[]
+        upper_branch = Int[]
         mean_branch = Float64[]
         std_branch = Float64[]
 
@@ -47,15 +63,25 @@ function hist_analysis(hist::H) where H<:AbstractSimHistory
             push!(num_anode, D.ba)
             push!(num_bnode, D.b)
             m = length.(view(D.ba_particles, 1:D.ba))
+            l_m, m_m, u_m = quantile(m, (0.1, 0.5, 0.9))
+            push!(median_m, m_m)
+            push!(lower_m, m_m-l_m)
+            push!(upper_m, u_m-m_m)
             push!(mean_m, mean(m))
             push!(std_m, std(m))
             branch = length.(view(D.ba_children, 1:D.ba))
+            l_b, m_b, u_b = quantile(branch, (0.1, 0.5, 0.9))
+            push!(median_branch, m_b)
+            push!(lower_branch, m_b-l_b)
+            push!(upper_branch, u_b-m_b)
             push!(mean_branch, mean(branch))
             push!(std_branch, std(branch))
         end
-        p2 = plot(hcat(num_anode,num_bnode), label=["Action" "Belief"], xaxis="Steps", yaxis="Nodes expanded")
-        p3 = plot(mean_m, ribbon=std_m, xaxis="Steps", yaxis="Avg. particles", legend=false)
-        p4 = plot(mean_branch, ribbon=std_branch, xaxis="Steps", yaxis="Avg. Obs.", legend=false)
+        p2 = plot(hcat(num_anode,num_bnode), label=["Action" "Belief"], xaxis="Steps", yaxis="Nodes expanded", legend=:best)
+        p3 = plot(median_m, ribbon=(lower_m, upper_m), xaxis="Steps", yaxis="Particles used", label="quantile")
+        plot!(p3, mean_m, ribbon=std_m, label="mean", legend=:best)
+        p4 = plot(median_branch, ribbon=(lower_branch, upper_branch), xaxis="Steps", yaxis="Obs. Num.", label="quantile")
+        plot!(p4, mean_branch, ribbon=std_branch, label="mean", legend=:best)
         display(plot(p1, p2, p3, p4, layout = (2, 2)))
     end
     return nothing

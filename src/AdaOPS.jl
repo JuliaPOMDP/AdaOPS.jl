@@ -22,8 +22,6 @@ using MCTS
 import MCTS: convert_to_policy
 using BasicPOMCP
 
-import Random.rand
-
 export
     AdaOPSSolver,
     AdaOPSPlanner,
