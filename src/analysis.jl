@@ -46,15 +46,15 @@ function hist_analysis(hist::H) where H<:AbstractSimHistory
         num_anode = Int[]
         num_bnode = Int[]
 
-        median_m = Int[]
-        lower_m = Int[] # lower quantile
-        upper_m = Int[] # upper quantile
+        median_m = Float64[]
+        lower_m = Float64[] # lower quantile
+        upper_m = Float64[] # upper quantile
         mean_m = Float64[]
         std_m = Float64[]
 
-        median_branch = Int[]
-        lower_branch = Int[]
-        upper_branch = Int[]
+        median_branch = Float64[]
+        lower_branch = Float64[]
+        upper_branch = Float64[]
         mean_branch = Float64[]
         std_branch = Float64[]
 

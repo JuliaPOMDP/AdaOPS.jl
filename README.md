@@ -1,5 +1,12 @@
 # AdaOPS
 
+[![Build Status](https://travis-ci.com/LAMDA-POMDP/AdaOPS.jl.svg?branch=main)](https://travis-ci.com/LAMDA-POMDP/AdaOPS.jl)
+
+[![Coverage Status](https://coveralls.io/repos/LAMDA-POMDP/AdaOPS.jl/badge.svg?branch=main&service=github)](https://coveralls.io/github/LAMDA-POMDP/AdaOPS.jl?branch=main)
+
+[![codecov.io](http://codecov.io/github/LAMDA-POMDP/AdaOPS.jl/coverage.svg?branch=main)](http://codecov.io/github/LAMDA-POMDP/AdaOPS.jl?branch=main)
+
+
 An implementation of the AdaOPS (Adaptive Online Packing-based Search), which is an online POMDP Solver used to solve problems defined with the [POMDPs.jl generative interface](https://github.com/JuliaPOMDP/POMDPs.jl).
 
 If you are trying to use this package and require more documentation, please file an issue!

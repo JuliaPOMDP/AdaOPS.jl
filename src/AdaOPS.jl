@@ -83,7 +83,7 @@ Further information can be found in the field docstrings (e.g.
     epsilon_0::Float64                      = 0.0
 
     "The δ-packing of beliefs will be generated."
-    delta::Float64                          = 1.0
+    delta::Float64                          = 0.1
 
     "The target error for belief estimation."
     zeta::Float64                           = 0.1
@@ -98,7 +98,7 @@ Further information can be found in the field docstrings (e.g.
     m_init::Int                             = 30
 
     "At most sigma times of m_init particles are allowed for estimating a belief."
-    sigma::Float64                          = 1.0
+    sigma::Float64                          = 2.0
 
     "Resample when the design effect of a belief node exceed Deff_thres"
     Deff_thres::Float64                     = 2.0

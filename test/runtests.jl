@@ -9,8 +9,8 @@ using POMDPModelTools
 using ParticleFilters
 using BeliefUpdaters
 using StaticArrays
+using POMDPPolicies
 
-include("rocksample_test.jl")
 include("independent_bounds.jl")
 
 pomdp = BabyPOMDP()
@@ -18,12 +18,12 @@ pomdp.discount = 1.0
 p = solve(AdaOPSSolver(), pomdp)
 
 K = 10
-b_0 = initialstate(pomdp)
+b0 = initialstate(pomdp)
 o = false
 tval = 7.0
 tree = AdaOPSTree(p, b0)
 tree.obs[1] = o
-b = WPFBelief([rand(b_0)], [1.0], 1, 0, tree, o)
+b = WPFBelief([rand(b0)], [1.0], 1, 0, tree, o)
 
 pol = FeedWhenCrying()
 rng = MersenneTwister(2)
@@ -48,11 +48,32 @@ rng = MersenneTwister(2)
     @test history(b)[end].o == o
 end
 
+# Light Dark Test
+pomdp = LightDark1D()
+random = solve(RandomSolver(), pomdp)
+Base.convert(::Type{SVector{1,Float64}}, s::LightDark1DState) = SVector{1,Float64}(s.y)
+grid = StateGrid(range(0, stop=15, length=11)[1:end-1])
+bds = IndependentBounds(FORollout(random), pomdp.correct_r, check_terminal=true)
+solver = AdaOPSSolver(default_action=random,
+                    bounds=bds,
+                    grid=grid,
+                    m_init=40,
+                    zeta=0.03,
+                    tree_in_info=true
+                    )
+planner = solve(solver, pomdp)
+hr = HistoryRecorder(max_steps=50)
+@time hist = simulate(hr, pomdp, planner)
+hist_analysis(hist)
+println("Discounted reward is $(discounted_reward(hist))")
+
+# BabyPOMDP Test
 Base.convert(::Type{SVector{1,Float64}}, s::Bool) = SVector{1,Float64}(s)
 grid = StateGrid([1.0])
 # Type stability
 pomdp = BabyPOMDP()
 bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
+bds = IndependentBounds(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
 solver = AdaOPSSolver(bounds=bds,
                       rng=MersenneTwister(4),
                       grid=grid,
@@ -79,27 +100,27 @@ pomdp = BabyPOMDP()
 
 # constant bounds
 bds = IndependentBounds(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
-solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=grid, sigma=3, tree_in_info=false, num_b=10_000)
+solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=grid, sigma=3, tree_in_info=true, num_b=10_000)
 planner = solve(solver, pomdp)
-hr = HistoryRecorder(max_steps=50)
+hr = HistoryRecorder(max_steps=20)
 @time hist = simulate(hr, pomdp, planner)
 hist_analysis(hist)
 println("Discounted reward is $(discounted_reward(hist))")
 
-# FO policy lower bound
+# SemiPORollout lower bound
 bds = IndependentBounds(SemiPORollout(FeedWhenCrying()), 0.0)
-solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=grid, sigma=3, tree_in_info=false)
+solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, grid=grid, sigma=3, tree_in_info=true, num_b=10_000)
 planner = solve(solver, pomdp)
-hr = HistoryRecorder(max_steps=50)
+hr = HistoryRecorder(max_steps=20)
 @time hist = simulate(hr, pomdp, planner)
 hist_analysis(hist)
 println("Discounted reward is $(discounted_reward(hist))")
 
 # PO policy lower bound
 bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
-solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, tree_in_info=false)
+solver = AdaOPSSolver(bounds=bds, zeta=0.03, m_init=60, xi=0.1, tree_in_info=true, num_b=10_000)
 planner = solve(solver, pomdp)
-hr = HistoryRecorder(max_steps=50)
+hr = HistoryRecorder(max_steps=20)
 @time hist = simulate(hr, pomdp, planner)
 hist_analysis(hist)
 println("Discounted reward is $(discounted_reward(hist))")

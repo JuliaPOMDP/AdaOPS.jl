@@ -45,8 +45,7 @@ julia = "1"
 [extras]
 POMDPModels = "355abbd5-f08e-5560-ac9e-8b5f2592a0ca"
 ProfileView = "c46f51b8-102a-5cf2-8d2c-8597cb0e0da7"
-RockSample = "de008ff0-c357-11e8-3329-7fe746fe836e"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "POMDPModels", "ProfileView", "RockSample"]
+test = ["Test", "POMDPModels", "ProfileView"]
