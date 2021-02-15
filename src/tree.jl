@@ -36,14 +36,15 @@ function AdaOPSTree(p::AdaOPSPlanner{S,A,O,M}, b0::RB) where {S,A,O,M<:POMDP{S,A
 end
 
 function reset!(tree::AdaOPSTree{S,A,O,RB}, b0::RB) where {S,A,O,RB}
-    empty!.(view(tree.weights, 1:tree.b))
-    empty!.(view(tree.children, 1:tree.b))
-    empty!.(view(tree.ba_particles, 1:tree.ba))
-    empty!.(view(tree.ba_children, 1:tree.ba))
+    empty!.(tree.weights)
+    empty!.(tree.children)
+    empty!.(tree.ba_particles)
+    empty!.(tree.ba_children)
     tree.u[1] = 10000.0
     tree.l[1] = -10000.0
     tree.b = 1
     tree.ba = 0
+    tree.root_belief = b0
     return nothing
 end
 

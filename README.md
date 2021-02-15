@@ -66,7 +66,7 @@ A δ-packing of observation branches will be generated, i.e., the belief nodes w
 ### Bounds
 
 #### Dependent bounds
-The bound passed into `AdaOPSSolver` can be a function in the form of `lower_bound, upper_bound = f(pomdp, wpf_belief)`, or any other objects for which a `bounds` function is implemented.
+The bound passed into `AdaOPSSolver` can be a function in the form of `lower_bound, upper_bound = f(pomdp, wpf_belief)`, or any other objects for which a `AdaOPS.bounds(obj::OBJECT, pomdp::POMDP, b::WPFBelief, max_depth::Int, bounds_warning::Bool)` function is implemented.
 
 #### Independent bounds
 In most cases, the recommended way to specify bounds is with an `IndependentBounds` object, i.e.
