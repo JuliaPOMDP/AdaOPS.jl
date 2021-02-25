@@ -1,10 +1,11 @@
-function AdaOPSTree(p::AdaOPSPlanner{S,A,O,M}, b0::RB) where {S,A,O,M<:POMDP{S,A,O},RB}
+function AdaOPSTree(p::AdaOPSPlanner{S,A,O}, b0::RB) where {S,A,O,RB}
     num_b = p.sol.num_b
     num_ba = num_b
     num_a = length(actions(p.pomdp))
     m_max = ceil(Int, p.sol.sigma * p.sol.m_init)
+    belief = resample!(p.resampled, b0, p.pomdp, p.rng)
 
-    if p.sol.tree_in_info || p.tree === nothing || typeof(p.tree.root_belief) !== RB
+    if p.sol.tree_in_info || p.tree === nothing
         tree = AdaOPSTree([Float64[]],
                         [sizehint!(Int[], num_a)],
                         [0],
@@ -22,7 +23,7 @@ function AdaOPSTree(p::AdaOPSPlanner{S,A,O,M}, b0::RB) where {S,A,O,M<:POMDP{S,A
                         Float64[],
                         A[],
 
-                        b0,
+                        belief,
                         1,
                         0
                     )
@@ -30,12 +31,12 @@ function AdaOPSTree(p::AdaOPSPlanner{S,A,O,M}, b0::RB) where {S,A,O,M<:POMDP{S,A
         resize_ba!(tree, num_ba, m_max)
     else
         tree = p.tree
-        reset!(tree, b0)
+        reset!(tree, belief)
     end
-    return tree::AdaOPSTree{S,A,O,RB}
+    return tree::AdaOPSTree{S,A,O}
 end
 
-function reset!(tree::AdaOPSTree{S,A,O,RB}, b0::RB) where {S,A,O,RB}
+function reset!(tree::AdaOPSTree, b0::WeightedParticleBelief)
     empty!.(tree.weights)
     empty!.(tree.children)
     empty!.(tree.ba_particles)
@@ -48,7 +49,7 @@ function reset!(tree::AdaOPSTree{S,A,O,RB}, b0::RB) where {S,A,O,RB}
     return nothing
 end
 
-function expand!(D::AdaOPSTree{S,A,O,RB}, b::Int, p::AdaOPSPlanner{S,A,O,M}) where {S,A,O,M<:POMDP{S,A,O},RB}
+function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     belief, resampled = get_belief(D, b, p)
     if weight_sum(belief) === 0.0
         return -D.l[b], -D.u[b]
@@ -105,39 +106,32 @@ end
 function DesignEffect(D::AdaOPSTree, b::Int)
     w = D.weights[b]
     n = length(w)
-    ESS = (sum(w)^2)/(w'w)
+    ESS = (sum(w)^2)/dot(w, w)
     return n/ESS
 end
 
-function get_belief(D::AdaOPSTree{S,A,O,RB}, b::Int, p::AdaOPSPlanner{S,A,O,M}) where {S,A,O,M<:POMDP{S,A,O},RB}
+function get_belief(D::AdaOPSTree{S}, b::Int, p::AdaOPSPlanner{S}) where S
     if b === 1
-        belief = resample!(p.resampled, D.root_belief, p.pomdp, p.rng)
-        resampled = true
-    else
-        P = D.ba_particles[D.parent[b]]
-        W = D.weights[b]
-        w_sum = 0.0
-        @inbounds for i in eachindex(P)
-            if isterminal(p.pomdp, P[i])
-                W[i] = 0.0
-            else
-                w_sum += W[i]
-            end
-        end
-        if w_sum === 0.0
-            return WeightedParticleBelief(P, W, w_sum)::WeightedParticleBelief{S}, true
-        end
-        resampled = DesignEffect(D, b) > p.Deff_thres
-        if resampled
-            belief = resample!(p.resampled, WeightedParticleBelief(P, W, w_sum), p.rng)
+        return D.root_belief::WeightedParticleBelief{S}, true
+    end
+    P = D.ba_particles[D.parent[b]]
+    W = D.weights[b]
+    w_sum = 0.0
+    @inbounds for i in eachindex(P)
+        if isterminal(p.pomdp, P[i])
+            W[i] = 0.0
         else
-            belief = WeightedParticleBelief(P, W, w_sum)
+            w_sum += W[i]
         end
     end
-    return belief::WeightedParticleBelief{S}, resampled::Bool
+    if w_sum !== 0.0 && DesignEffect(D, b) > p.Deff_thres
+        return resample!(p.resampled, WeightedParticleBelief(P, W, w_sum), p.rng)::WeightedParticleBelief{S}, true
+    else
+        return WeightedParticleBelief(P, W, w_sum)::WeightedParticleBelief{S}, false
+    end
 end
 
-function empty_buffer!(p::AdaOPSPlanner{S,A,O,P,N}) where {S,A,O,P<:POMDP{S,A,O},N}
+function empty_buffer!(p::AdaOPSPlanner)
     empty!(p.obs)
     empty!(p.obs_ind_dict)
     empty!(p.w)
@@ -186,7 +180,7 @@ function gen_packing!(D::AdaOPSTree{S,A,O}, P::Vector{S}, belief::WeightedPartic
     return nothing
 end
 
-function reweight!(w′::T, w::SubArray{Float64,1}, P::SubArray{S,1}, a::A, o::O, m::M) where {T<:AbstractVector{Float64},S,A,O,M<:POMDP{S,A,O}}
+function reweight!(w′::AbstractVector{Float64}, w::AbstractVector{Float64}, P::AbstractVector{S}, a::A, o::O, m::M) where {S,A,O,M<:POMDP{S,A,O}}
     @inbounds for i in eachindex(w′)
         if w[i] === 0.0
             w′[i] = 0.0
@@ -197,7 +191,7 @@ function reweight!(w′::T, w::SubArray{Float64,1}, P::SubArray{S,1}, a::A, o::O
     end
 end
 
-function in_packing(norm_w::Vector{Float64}, W::SubArray{Vector{Float64},1}, δ::Float64)
+function in_packing(norm_w::AbstractVector{Float64}, W::AbstractVector{Vector{Float64}}, δ::Float64)
     @inbounds for i in eachindex(W)
         if norm(W[i] - norm_w, 1) <= δ
             return i

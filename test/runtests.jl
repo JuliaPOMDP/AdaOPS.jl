@@ -73,7 +73,6 @@ grid = StateGrid([1.0])
 # Type stability
 pomdp = BabyPOMDP()
 bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
-bds = IndependentBounds(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
 solver = AdaOPSSolver(bounds=bds,
                       rng=MersenneTwister(4),
                       grid=grid,

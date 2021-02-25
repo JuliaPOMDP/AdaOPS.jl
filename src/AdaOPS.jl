@@ -137,7 +137,7 @@ Further information can be found in the field docstrings (e.g.
     num_b::Int                              = 50_000
 end
 
-mutable struct AdaOPSTree{S,A,O,RB}
+mutable struct AdaOPSTree{S,A,O}
     # belief nodes
     weights::Vector{Vector{Float64}} # stores weights for *belief node*
     children::Vector{Vector{Int}} # to children *ba nodes*
@@ -157,7 +157,7 @@ mutable struct AdaOPSTree{S,A,O,RB}
     ba_r::Vector{Float64} # needed for backup
     ba_action::Vector{A}
 
-    root_belief::RB
+    root_belief::WeightedParticleBelief
     b::Int
     ba::Int
 end

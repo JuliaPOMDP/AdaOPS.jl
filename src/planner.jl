@@ -1,5 +1,5 @@
-function build_tree(p::AdaOPSPlanner, b_0)
-    D = AdaOPSTree(p, b_0)
+function build_tree(p::AdaOPSPlanner, b0)
+    D = AdaOPSTree(p, b0)
     b = 1
     trial = 1
     start = CPUtime_us()

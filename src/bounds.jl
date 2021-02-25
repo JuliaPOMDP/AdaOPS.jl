@@ -20,8 +20,8 @@ end
 
 Specify lower and upper bounds that are not independent.
 ###
-It can take a function, `f(pomdp, belief)`, that returns both lower and upper bounds.
-It can be any object for which a `bounds` function is implemented
+It can take as input a function, `f(pomdp, belief)`, that returns both lower and upper bounds.
+It can take as input any object for which a `bounds` function is implemented
 
 """
 
@@ -221,19 +221,21 @@ function bound!(V::Vector{Float64}, bd::SolvedFOValue{P}, pomdp::M, b::WPFBelief
     return V
 end
 
-bound(bd::SolvedPOValue{P}, pomdp::M, b::WPFBelief{S,A,O}, max_depth::Int) where {P,S,A,O,M<:POMDP{S,A,O}} = value(bd.policy, b)
+bound(bd::SolvedPOValue, pomdp::POMDP, b::WPFBelief, max_depth::Int) = value(bd.policy, b)
 
 # Convert an unsolved estimator to solved estimator
 convert_estimator(ev, solver, mdp) = ev
 
 function convert_estimator(est::FOValue, solver::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, UnderlyingMDP(pomdp))
-    SolvedFOValue(policy, Float64[])
+    m_max = ceil(Int, solver.sigma * solver.m_init)
+    SolvedFOValue(policy, sizehint!(Float64[], m_max))
 end
 
 function convert_estimator(est::FORollout, solver::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, UnderlyingMDP(pomdp))
-    SolvedFORollout(policy, Float64[], solver.rng)
+    m_max = ceil(Int, solver.sigma * solver.m_init)
+    SolvedFORollout(policy, sizehint!(Float64[], m_max), solver.rng)
 end
 
 function convert_estimator(est::POValue, solver::AdaOPSSolver, pomdp::POMDP)
@@ -243,18 +245,19 @@ end
 
 function convert_estimator(est::PORollout, solver::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, pomdp)
-    SolvedPORollout(policy, Float64[], est.updater, solver.rng)
+    m_max = ceil(Int, solver.sigma * solver.m_init)
+    SolvedPORollout(policy, sizehint!(Float64[], m_max), est.updater, solver.rng)
 end
 
 function convert_estimator(est::RolloutEstimator, solver::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, pomdp)
-    SolvedPORollout(policy, Float64[], updater(policy), solver.rng)
+    m_max = ceil(Int, solver.sigma * solver.m_init)
+    SolvedPORollout(policy, sizehint!(Float64[], m_max), updater(policy), solver.rng)
 end
 
-function convert_estimator(est::SemiPORollout, solver::AdaOPSSolver, pomdp)
+function convert_estimator(est::SemiPORollout, solver::AdaOPSSolver, pomdp::POMDP{S,A,O}) where {S,A,O}
     policy = MCTS.convert_to_policy(est.solver, pomdp)
-    O = obstype(pomdp)
-    S = statetype(pomdp)
+    # this can be further optimized by memory preallocation - To Do
     SolvedSemiPORollout(policy, 0, 0, Dict{O, Int}[], Vector{S}[], Vector{Float64}[], Vector{Float64}[], solver.rng)
 end
 
@@ -268,11 +271,6 @@ POMDPLinter.@POMDP_require estimate_value(estimator::Union{SolvedPORollout,Solve
 end
 
 # Perform a rollout simulation to estimate the value.
-function rollout(est::SolvedPORollout{P,U}, pomdp::M, start_state::S, b::WPFBelief{S,A,O}, steps::Int) where {P,U<:BasicParticleFilter,S,A,O,M<:POMDP{S,A,O}}
-    sim = RolloutSimulator(est.rng, steps)
-    return pf_simulate(sim, pomdp, est.policy, est.updater, b, start_state)
-end
-
 function rollout(est::SolvedPORollout, pomdp::POMDP, start_state, b::WPFBelief, steps::Int)
     sim = RolloutSimulator(est.rng, steps)
     return simulate(sim, pomdp, est.policy, est.updater, b, start_state)
@@ -343,11 +341,7 @@ function estimate_value(est::SolvedSemiPORollout{S,O,P}, pomdp::M, b::WPFBelief{
     U = 0.0
     for (o, obs_ind) in obs_ind_dict
         if length(states[obs_ind]) == 1
-            if hasmethod(action, (typeof(est.policy), S))
-                U += probs[obs_ind] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, est.policy, states[obs_ind][1])
-            else
-                U += probs[obs_ind] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, POtoFO(est.policy), states[obs_ind][1])
-            end
+            U += probs[obs_ind] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, est.policy, states[obs_ind][1])
         else
             bp = WPFBelief(states[obs_ind], weights[obs_ind], 1, b.depth+1, b.tree, o)
             U += probs[obs_ind] * estimate_value(est, pomdp, bp, steps-1)
@@ -356,46 +350,6 @@ function estimate_value(est::SolvedSemiPORollout{S,O,P}, pomdp::M, b::WPFBelief{
     return (r_sum + discount(pomdp)*U)/weight_sum(b)
 end
 
-# For the partially observable simulation
-function pf_simulate(sim::RolloutSimulator, pomdp::M, policy::P, updater::BasicParticleFilter, initial_belief::WPFBelief{S,A,O}, s::S) where {P,S,A,O,M<:POMDP{S,A,O}}
-    eps = sim.eps === nothing ? 0.0 : sim.eps
-    max_steps = sim.max_steps === nothing ? 300 : sim.max_steps
-
-    b = initialize_belief(updater, initial_belief)
-
-    disc = 1.0
-    r_total = 0.0
-    step = 1
-    while disc > eps && !isterminal(pomdp, s) && step <= max_steps
-        s, o, r, b = update(updater, s, b, action(policy, b))
-        r_total += disc*r
-        disc *= discount(pomdp)
-        step += 1
-    end
-    return r_total
+POMDPLinter.@POMDP_require estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, steps::Int) begin
+    @subreq action(est.policy, rand(b))
 end
-
-function update(up::BasicParticleFilter, s::S, b::ParticleCollection{S}, a::A) where {S,A}
-    pm = up._particle_memory
-    wm = up._weight_memory
-    resize!(pm, n_particles(b))
-    resize!(wm, n_particles(b)+1)
-    sp, o, r = @gen(:sp, :o, :r)(up.predict_model, s, a, up.rng)
-    predict!(pm, up.predict_model, b, a, o, up.rng)
-    push!(b.particles, s)
-    push!(pm, sp)
-    reweight!(wm, up.reweight_model, b, a, pm, o, up.rng)
-    bp = ParticleFilters.resample(up.resampler,
-                                    WeightedParticleBelief(pm, wm, sum(wm), nothing),
-                                    up.predict_model,
-                                    up.reweight_model,
-                                    b, a, o,
-                                    up.rng)
-    return sp, o, r, bp
-end
-
-struct POtoFO{P<:Policy} <: Policy
-    policy::P
-end
-
-POMDPs.action(p::POtoFO{P}, s::S) where {P,S} = action(p.policy, ParticleCollection([s]))
