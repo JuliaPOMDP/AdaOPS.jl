@@ -1,7 +1,3 @@
-using POMDPs
-using AdaOPS
-using POMDPToolbox
-using POMDPModels
 using ProgressMeter
 
 T = 50
@@ -9,13 +5,13 @@ N = 50
 
 pomdp = BabyPOMDP()
 
-bounds = IndependentBounds(RolloutLB(PORollout(FeedWhenCrying(),PreviousObservationUpdater())), 0.0)
-# bounds = IndependentBounds(reward(pomdp, false, true)/(1-discount(pomdp)), 0.0)
+bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
+# bds = IndependentBounds(reward(pomdp, false, true)/(1-discount(pomdp)), 0.0)
 
 solver = AdaOPSSolver(epsilon_0=0.1,
-                      m=100,
-                      D=50,
-                      bounds=bounds,
+                      m_init=100,
+                      max_depth=50,
+                      bounds=bds,
                       T_max=Inf,
                       max_trials=500,
                       rng=MersenneTwister(4)
@@ -27,8 +23,8 @@ fwc_rsum = 0.0
     planner = solve(solver, pomdp)
     sim = RolloutSimulator(max_steps=T, rng=MersenneTwister(i))
     fwc_sim = deepcopy(sim)
-    rsum += simulate(sim, pomdp, planner)
-    fwc_rsum += simulate(fwc_sim, pomdp, FeedWhenCrying())
+    global rsum += simulate(sim, pomdp, planner)
+    global fwc_rsum += simulate(fwc_sim, pomdp, FeedWhenCrying())
 end
 
 @show rsum/N

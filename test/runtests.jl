@@ -11,6 +11,7 @@ using BeliefUpdaters
 using StaticArrays
 using POMDPPolicies
 
+include("baby_sanity_check.jl")
 include("independent_bounds.jl")
 
 pomdp = BabyPOMDP()

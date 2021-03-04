@@ -52,7 +52,7 @@ export
     hist_analysis
 
 include("grid.jl")
-include("Sampling.jl")
+include("sampling.jl")
 
 """
     AdaOPSSolver(<keyword arguments>)
