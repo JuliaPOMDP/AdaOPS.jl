@@ -13,6 +13,7 @@ using POMDPSimulators
 using POMDPPolicies
 using POMDPLinter
 using LinearAlgebra
+using Distances
 using Statistics
 using StaticArrays
 using Distributions

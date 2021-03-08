@@ -191,9 +191,9 @@ function reweight!(w′::AbstractVector{Float64}, w::AbstractVector{Float64}, P:
     end
 end
 
-function in_packing(norm_w::AbstractVector{Float64}, W::AbstractVector{Vector{Float64}}, δ::Float64)
+function in_packing(norm_w::Vector{Float64}, W::AbstractVector{Vector{Float64}}, δ::Float64)
     @inbounds for i in eachindex(W)
-        if norm(W[i] - norm_w, 1) <= δ
+        if cityblock(W[i], norm_w) <= δ
             return i
         end
     end
