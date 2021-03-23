@@ -14,7 +14,7 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MCTS = "e12ccd36-dcad-5f33-8774-9175229e7b33"
 POMDPLinter = "f3bd98c0-eb40-45e2-9eb1-f2763262d755"
 POMDPModelTools = "08074719-1b2a-587c-a292-00f91cc44415"
-POMDPPolicies = "182e52fb-cfd0-5e46-8c26-fd0667c990f4"
+POMDPModels = "355abbd5-f08e-5560-ac9e-8b5f2592a0ca"
 POMDPSimulators = "e0d0a172-29c6-5d4e-96d0-f262df5d01fd"
 POMDPs = "a93abf59-7444-517b-a68a-c42f96afdd7d"
 Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
@@ -35,7 +35,6 @@ Distributions = "0.22 - 0.24"
 MCTS = "0.4"
 POMDPLinter = "0.1"
 POMDPModelTools = "0.3"
-POMDPPolicies = "0.3.3, 0.4"
 POMDPSimulators = "0.3"
 POMDPs = "0.9"
 Parameters = "0.12"
@@ -46,9 +45,10 @@ julia = "1"
 
 [extras]
 POMDPModels = "355abbd5-f08e-5560-ac9e-8b5f2592a0ca"
+POMDPPolicies = "182e52fb-cfd0-5e46-8c26-fd0667c990f4"
 ProfileView = "c46f51b8-102a-5cf2-8d2c-8597cb0e0da7"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "POMDPModels", "ProfileView", "ProgressMeter"]
+test = ["Test", "POMDPModels", "POMDPPolicies", "ProfileView", "ProgressMeter"]

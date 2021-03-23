@@ -11,7 +11,7 @@ mutable struct WPFBelief{S, A, O} <: AbstractParticleBelief{S}
 end
 
 WPFBelief(particles::Vector{S}, weights::Vector{Float64}, weight_sum::N, belief::Int, depth::Int, tree::AdaOPSTree{S,A,O}, obs::O) where {S,A,O,N<:Real} = WPFBelief{S,A,O}(particles, weights, convert(Float64, weight_sum), belief, depth, tree, obs, nothing, nothing)
-WPFBelief(particles::Vector{S}, weights::Vector{Float64}, belief::Int, depth::Int, tree::AdaOPSTree{S,A,O}, obs::O) where {S,A,O} = WPFBelief(particles, weights, sum(weights), belief, depth, tree, obs, nothing, nothing)
+WPFBelief(particles, weights, belief, depth, tree, obs) = WPFBelief(particles, weights, sum(weights), belief, depth, tree, obs, nothing, nothing)
 
 function ParticleFilters.rand(rng::RNG, b::WPFBelief{S}) where {S,RNG<:AbstractRNG}
     t = rand(rng) * b.weight_sum

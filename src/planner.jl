@@ -5,31 +5,33 @@ function build_tree(p::AdaOPSPlanner, b0)
     start = CPUtime_us()
 
     Depth = sizehint!(Int[], 2000)
-    while D.u[1]-D.l[1] > p.sol.epsilon_0 &&
-          CPUtime_us()-start < p.sol.T_max*1e6 &&
-          trial <= p.sol.max_trials
+    sol = solver(p)
+    while D.u[1]-D.l[1] > sol.epsilon_0 &&
+          CPUtime_us()-start < sol.T_max*1e6 &&
+          trial <= sol.max_trials
         push!(Depth, explore!(D, 1, p))
         trial += 1
     end
-    if (CPUtime_us()-start)*1e-6 > p.sol.T_max*p.sol.overtime_warning_threshold
+    if (CPUtime_us()-start)*1e-6 > sol.T_max*sol.overtime_warning_threshold
         @warn(@sprintf("Surpass the time limit. The actual runtime is %3.1fs, 
         delta=%4.2f, zeta=%4.2f, m_init=%3d, sigma=%4.2f, grid=%s, bounds=%s",
-        (CPUtime_us()-start)*1e-6, p.delta, p.sol.zeta, p.sol.m_init, p.sol.sigma, typeof(p.sol.grid), typeof(p.sol.bounds)))
+        (CPUtime_us()-start)*1e-6, sol.delta, sol.zeta, sol.m_init, sol.sigma, typeof(sol.grid), typeof(sol.bounds)))
     end
     return D, Depth
 end
 
 function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    while D.Delta[b] < p.max_depth
+    sol = solver(p)
+    while D.Delta[b] < sol.max_depth
         if isempty(D.children[b]) # a leaf
             Δl, Δu = expand!(D, b, p)
-            if backup!(D, b, p, Δl, Δu) || excess_uncertainty(D, b, p) <= 0.0
+            if backup!(D, b, p, Δl, Δu) || excess_uncertainty(D, b, sol.xi, p) <= 0.0
                 break
             end
         end
         b = next_best(D, b, p)
     end
-    if D.Delta[b] == p.max_depth
+    if D.Delta[b] == sol.max_depth
         backup!(D, b, p, -D.u[b], -D.l[b])
     end
 
@@ -72,8 +74,8 @@ end
 function next_best(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     max_u = -Inf
     best_ba = first(D.children[b])
-    for ba in D.children[b]
-        @inbounds if D.ba_u[ba] > max_u
+    @inbounds for ba in D.children[b]
+        if D.ba_u[ba] > max_u
             max_u = D.ba_u[ba]
             best_ba = ba
         end
@@ -81,8 +83,8 @@ function next_best(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
 
     max_eu = -Inf
     best_bp = first(D.ba_children[best_ba])
-    tolerated_gap = p.xi * max(D.u[1]-D.l[1], 0.0) / p.discounts[D.Delta[best_bp]+1]
-    for bp in D.ba_children[best_ba]
+    tolerated_gap = solver(p).xi * max(D.u[1]-D.l[1], 0.0) / p.discounts[D.Delta[best_bp]+1]
+    @inbounds for bp in D.ba_children[best_ba]
         eu = D.obs_prob[bp] * (D.u[bp]-D.l[bp] - tolerated_gap)
         if eu > max_eu
             max_eu = eu
@@ -93,6 +95,6 @@ function next_best(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     return best_bp
 end
 
-function excess_uncertainty(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    return D.obs_prob[b] * (D.u[b]-D.l[b] - p.xi * max(D.u[1]-D.l[1], 0.0) / p.discounts[D.Delta[b]+1])
+function excess_uncertainty(D::AdaOPSTree, b::Int, ξ::Float64, p::AdaOPSPlanner)
+    return D.obs_prob[b] * (D.u[b]-D.l[b] - ξ * max(D.u[1]-D.l[1], 0.0) / p.discounts[D.Delta[b]+1])
 end

@@ -10,7 +10,6 @@ using Random
 using Printf
 using POMDPModelTools
 using POMDPSimulators
-using POMDPPolicies
 using POMDPLinter
 using LinearAlgebra
 using Distances
@@ -141,7 +140,7 @@ end
 mutable struct AdaOPSTree{S,A,O}
     # belief nodes
     weights::Vector{Vector{Float64}} # stores weights for *belief node*
-    children::Vector{Vector{Int}} # to children *ba nodes*
+    children::Vector{UnitRange{Int}} # to children *ba nodes*
     parent::Vector{Int} # maps to the parent *ba node*
     Delta::Vector{Int}
     u::Vector{Float64}
@@ -151,7 +150,7 @@ mutable struct AdaOPSTree{S,A,O}
 
     # action nodes
     ba_particles::Vector{Vector{S}} # stores particles for *ba nodes*
-    ba_children::Vector{Vector{Int}}
+    ba_children::Vector{UnitRange{Int}}
     ba_parent::Vector{Int} # maps to parent *belief node*
     ba_u::Vector{Float64}
     ba_l::Vector{Float64}
@@ -164,13 +163,9 @@ mutable struct AdaOPSTree{S,A,O}
 end
 
 mutable struct AdaOPSPlanner{S, A, O, P<:POMDP{S,A,O}, N, B, RNG<:AbstractRNG} <: Policy
-    sol::AdaOPSSolver{N}
+    sol::AdaOPSSolver{N, RNG}
     pomdp::P
     bounds::B
-    delta::Float64
-    xi::Float64
-    max_depth::Int
-    Deff_thres::Float64
     discounts::Vector{Float64}
     rng::RNG
     # The following attributes are used to avoid reallocating memory
@@ -195,12 +190,14 @@ function AdaOPSPlanner(sol::AdaOPSSolver{N}, pomdp::POMDP{S,A,O}) where {S,A,O,N
     m_max = ceil(Int, sol.sigma * m_min)
     access_cnt = sol.grid !== nothing ? zeros_like(sol.grid) : Int[]
     norm_w = Vector{Float64}[Vector{Float64}(undef, m_min) for i in 1:m_max]
-    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, sol.delta, sol.xi, sol.max_depth, sol.Deff_thres, discounts, rng, 
+    return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, 
                         WeightedParticleBelief(Vector{S}(undef, m_max), ones(m_max), m_max), sizehint!(O[], m_max),
                         Dict{O, Int}(), sizehint!(Vector{Float64}[], m_max), norm_w, access_cnt,
                         sizehint!(Float64[], m_max), sizehint!(Float64[], m_max), sizehint!(Float64[], m_max),
                         nothing)
 end
+
+solver(p::AdaOPSPlanner) = p.sol
 
 include("wpf_belief.jl")
 include("bounds.jl")

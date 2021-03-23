@@ -11,7 +11,7 @@ using BeliefUpdaters
 using StaticArrays
 using POMDPPolicies
 
-include("baby_sanity_check.jl")
+# include("baby_sanity_check.jl")
 include("independent_bounds.jl")
 
 pomdp = BabyPOMDP()
@@ -55,8 +55,7 @@ random = solve(RandomSolver(), pomdp)
 Base.convert(::Type{SVector{1,Float64}}, s::LightDark1DState) = SVector{1,Float64}(s.y)
 grid = StateGrid(range(0, stop=15, length=11)[1:end-1])
 bds = IndependentBounds(FORollout(random), pomdp.correct_r, check_terminal=true)
-solver = AdaOPSSolver(default_action=random,
-                    bounds=bds,
+solver = AdaOPSSolver(bounds=bds,
                     grid=grid,
                     m_init=40,
                     zeta=0.03,
@@ -93,7 +92,7 @@ info_analysis(info)
 Δu, Δl = @inferred AdaOPS.expand!(D, D.b, p)
 @inferred AdaOPS.backup!(D, 1, p, Δu, Δl)
 @inferred AdaOPS.next_best(D, 1, p)
-@inferred AdaOPS.excess_uncertainty(D, 1, p)
+@inferred AdaOPS.excess_uncertainty(D, 1, AdaOPS.solver(p).xi, p)
 @inferred action(p, b0)
 
 pomdp = BabyPOMDP()
