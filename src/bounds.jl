@@ -170,12 +170,12 @@ end
 
 mutable struct SolvedSemiPORollout{S, O, P<:Policy, RNG<:AbstractRNG}
     policy::P
-    inner_ind::Int
-    leaf_ind::Int
     obs_ind_dict::Vector{Dict{O, Int}}
+    probs::Vector{Vector{Float64}}
+    states_list::Vector{Vector{Vector{S}}}
+    weights_list::Vector{Vector{Vector{Float64}}}
     states::Vector{Vector{S}}
     weights::Vector{Vector{Float64}}
-    probs::Vector{Vector{Float64}}
     rng::RNG
 end
 
@@ -201,9 +201,7 @@ function bound(bd::SolvedPORollout{P}, pomdp::M, b::WPFBelief{S,A,O}, max_depth:
 end
 
 function bound(bd::SolvedSemiPORollout{S,O,P}, pomdp::M, b::WPFBelief{S,A,O}, max_depth::Int) where {P,S,A,O,M<:POMDP{S,A,O}}
-    bd.inner_ind = 0
-    bd.leaf_ind = 0
-    return estimate_value(bd, pomdp, b, max_depth-b.depth)
+    return estimate_value(bd, pomdp, b, max_depth-b.depth, 0, 0)
 end
 
 function bound(bd::SolvedFOValue{P}, pomdp::M, b::WPFBelief{S}, max_depth::Int) where {P,S,M<:POMDP{S}}
@@ -224,41 +222,53 @@ end
 bound(bd::SolvedPOValue, pomdp::POMDP, b::WPFBelief, max_depth::Int) = value(bd.policy, b)
 
 # Convert an unsolved estimator to solved estimator
-convert_estimator(ev, solver, mdp) = ev
+convert_estimator(ev, sol, mdp) = ev
 
-function convert_estimator(est::FOValue, solver::AdaOPSSolver, pomdp::POMDP)
+function convert_estimator(est::FOValue, sol::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, UnderlyingMDP(pomdp))
-    m_max = ceil(Int, solver.sigma * solver.m_init)
-    SolvedFOValue(policy, sizehint!(Float64[], m_max))
+    SolvedFOValue(policy, sizehint!(Float64[], sol.m_max))
 end
 
-function convert_estimator(est::FORollout, solver::AdaOPSSolver, pomdp::POMDP)
+function convert_estimator(est::FORollout, sol::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, UnderlyingMDP(pomdp))
-    m_max = ceil(Int, solver.sigma * solver.m_init)
-    SolvedFORollout(policy, sizehint!(Float64[], m_max), solver.rng)
+    SolvedFORollout(policy, sizehint!(Float64[], sol.m_max), sol.rng)
 end
 
-function convert_estimator(est::POValue, solver::AdaOPSSolver, pomdp::POMDP)
+function convert_estimator(est::POValue, sol::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, pomdp)
     SolvedPOValue(policy)
 end
 
-function convert_estimator(est::PORollout, solver::AdaOPSSolver, pomdp::POMDP)
+function convert_estimator(est::PORollout, sol::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, pomdp)
-    m_max = ceil(Int, solver.sigma * solver.m_init)
-    SolvedPORollout(policy, sizehint!(Float64[], m_max), est.updater, solver.rng)
+    SolvedPORollout(policy, sizehint!(Float64[], sol.m_max), est.updater, sol.rng)
 end
 
-function convert_estimator(est::RolloutEstimator, solver::AdaOPSSolver, pomdp::POMDP)
+function convert_estimator(est::RolloutEstimator, sol::AdaOPSSolver, pomdp::POMDP)
     policy = MCTS.convert_to_policy(est.solver, pomdp)
-    m_max = ceil(Int, solver.sigma * solver.m_init)
-    SolvedPORollout(policy, sizehint!(Float64[], m_max), updater(policy), solver.rng)
+    SolvedPORollout(policy, sizehint!(Float64[], sol.m_max), updater(policy), sol.rng)
 end
 
-function convert_estimator(est::SemiPORollout, solver::AdaOPSSolver, pomdp::POMDP{S,A,O}) where {S,A,O}
+function convert_estimator(est::SemiPORollout, sol::AdaOPSSolver, pomdp::POMDP{S,A,O}) where {S,A,O}
     policy = MCTS.convert_to_policy(est.solver, pomdp)
     # this can be further optimized by memory preallocation - To Do
-    SolvedSemiPORollout(policy, 0, 0, Dict{O, Int}[], Vector{S}[], Vector{Float64}[], Vector{Float64}[], solver.rng)
+    obs_ind_dict = Dict{O, Int}[]
+    probs = Vector{Float64}[]
+    states_list = Vector{Vector{S}}[]
+    weights_list = Vector{Vector{Float64}}[]
+    states = Vector{S}[]
+    weights = Vector{Float64}[]
+    for i in 1:sol.max_depth
+        push!(obs_ind_dict, Dict{O, Int}())
+        push!(probs, Float64[])
+        push!(states_list, Vector{S}[])
+        push!(weights_list, Vector{Float64}[])
+    end
+    for i in 1:max(sol.max_depth, 2*sol.m_max)
+        push!(states, S[])
+        push!(weights, Float64[])
+    end
+    SolvedSemiPORollout(policy, obs_ind_dict, probs, states_list, weights_list, states, weights, sol.rng)
 end
 
 # Estimate the value of state with estimator
@@ -291,22 +301,19 @@ POMDPLinter.@POMDP_require rollout(est::SolvedFORollout, pomdp::POMDP, start_sta
     @subreq simulate(sim, pomdp, est.policy, start_state)
 end
 
-function estimate_value(est::SolvedSemiPORollout{S,O,P}, pomdp::M, b::WPFBelief{S,A,O}, steps::Int) where {P,S,A,O,M<:POMDP{S,A,O}}
+function estimate_value(est::SolvedSemiPORollout{S,O,P}, pomdp::M, b::AbstractParticleBelief{S}, steps::Int, inner_ind::Int, leaf_ind::Int) where {P,S,A,O,M<:POMDP{S,A,O}}
     if steps <= 0 || weight_sum(b) == 0.0
         return 0.0
     end
-    est.inner_ind += 1
-    if length(est.probs) < est.inner_ind
-        push!(est.obs_ind_dict, Dict{O, Int}())
-        push!(est.probs, Float64[])
-    end
-    obs_ind_dict = est.obs_ind_dict[est.inner_ind]
-    probs = est.probs[est.inner_ind]
+    inner_ind += 1
+    obs_ind_dict = est.obs_ind_dict[inner_ind]
+    probs = est.probs[inner_ind]
+    states_list = est.states_list[inner_ind]
+    weights_list = est.weights_list[inner_ind]
     empty!(obs_ind_dict)
     empty!(probs)
-
-    states = Vector{S}[]
-    weights = Vector{Float64}[]
+    empty!(states_list)
+    empty!(weights_list)
 
     a = action(est.policy, b)
 
@@ -318,38 +325,50 @@ function estimate_value(est::SolvedSemiPORollout{S,O,P}, pomdp::M, b::WPFBelief{
             if !haskey(obs_ind_dict, o)
                 push!(probs, 0.0)
                 obs_ind_dict[o] = length(probs)
-                est.leaf_ind += 1
-                if length(est.states) < est.leaf_ind
-                    push!(est.states, Array{S,1}[])
-                    push!(est.weights, Array{Float64,1}[])
-                else
-                    empty!(est.states[est.leaf_ind])
-                    empty!(est.weights[est.leaf_ind])
-                end
-                push!(states, est.states[est.leaf_ind])
-                push!(weights, est.weights[est.leaf_ind])
+                leaf_ind += 1
+                empty!(est.states[leaf_ind])
+                empty!(est.weights[leaf_ind])
+                push!(states_list, est.states[leaf_ind])
+                push!(weights_list, est.weights[leaf_ind])
             end
             obs_ind = obs_ind_dict[o]
-            push!(states[obs_ind], sp)
-            push!(weights[obs_ind], weight(b, k) * obs_weight(pomdp, s, a, sp, o))
-            probs[obs_ind] += weight(b, k)
+            w = weight(b, k)
+            push!(states_list[obs_ind], sp)
+            push!(weights_list[obs_ind], w * obs_weight(pomdp, s, a, sp, o))
+            probs[obs_ind] += w
 
-            r_sum += r * weight(b, k)
+            r_sum += r * w
         end
     end
 
     U = 0.0
     for (o, obs_ind) in obs_ind_dict
-        if length(states[obs_ind]) == 1
-            U += probs[obs_ind] * simulate(RolloutSimulator(est.rng, steps-1), pomdp, est.policy, states[obs_ind][1])
+        if length(states_list[obs_ind]) == 1
+            U += probs[obs_ind] * rollout(pomdp, est.policy, ParticleCollection(states_list[obs_ind]), steps-1, est.rng)
         else
-            bp = WPFBelief(states[obs_ind], weights[obs_ind], 1, b.depth+1, b.tree, o)
-            U += probs[obs_ind] * estimate_value(est, pomdp, bp, steps-1)
+            U += probs[obs_ind] * estimate_value(est, pomdp, WeightedParticleBelief(states_list[obs_ind], weights_list[obs_ind]), steps-1, inner_ind, leaf_ind)
         end
     end
     return (r_sum + discount(pomdp)*U)/weight_sum(b)
 end
 
-POMDPLinter.@POMDP_require estimate_value(est::SolvedSemiPORollout, pomdp::POMDP, b::WPFBelief, steps::Int) begin
-    @subreq action(est.policy, rand(b))
+function rollout(pomdp::POMDP{S}, policy::Policy, b::ParticleCollection{S}, steps::Integer, rng::AbstractRNG) where S
+    @assert n_particles(b) == 1
+    disc = 1.0
+    r_total = 0.0
+    mem = particles(b)
+    s = mem[1]
+    while !isterminal(pomdp, s) && steps > 0
+        a = action(policy, b)
+        s, r = @gen(:sp, :r)(pomdp, s, a, rng)
+        r_total += disc*r
+        mem[1] = s
+        if b._probs !== nothing
+            empty!(b._probs)
+            b._probs[s] = 1.0
+        end
+        disc *= discount(pomdp)
+        steps -= 1
+    end
+    return r_total
 end
