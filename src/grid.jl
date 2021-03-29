@@ -20,6 +20,7 @@ mutable struct StateGrid{D}
 end
 StateGrid(cutPoints...) = StateGrid{Base.length(cutPoints)}(cutPoints...)
 Base.length(grid::StateGrid{D}) where D = D
+Base.size(grid::StateGrid{D}) where D = NTuple{D, Int}(length(points)+1 for points in grid.cutPoints)
 
 zeros_like(grid::StateGrid{D}) where D = zeros(Int, NTuple{D, Int}(length(points)+1 for points in grid.cutPoints))
 

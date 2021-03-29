@@ -14,8 +14,8 @@ function build_tree(p::AdaOPSPlanner, b0)
     end
     if (CPUtime_us()-start)*1e-6 > sol.T_max*sol.overtime_warning_threshold
         @warn(@sprintf("Surpass the time limit. The actual runtime is %3.1fs, 
-        delta=%4.2f, zeta=%4.2f, m_init=%3d, sigma=%4.2f, grid=%s, bounds=%s",
-        (CPUtime_us()-start)*1e-6, sol.delta, sol.zeta, sol.m_init, sol.sigma, typeof(sol.grid), typeof(sol.bounds)))
+        delta=%4.2f, m_min=%3d, m_max=%3d, zeta=%4.2f, grid=%s, bounds=%s",
+        (CPUtime_us()-start)*1e-6, sol.delta, sol.m_min, sol.m_max, sol.zeta, typeof(sol.grid), typeof(sol.bounds)))
     end
     return D, Depth
 end

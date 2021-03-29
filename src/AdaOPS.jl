@@ -82,23 +82,29 @@ Further information can be found in the field docstrings (e.g.
     "The target gap between the upper and the lower bound at the root of the AdaOPS tree."
     epsilon_0::Float64                      = 0.0
 
-    "The δ-packing of beliefs will be generated."
-    delta::Float64                          = 0.1
-
-    "The target error for belief estimation."
-    zeta::Float64                           = 0.1
-
     "The minimum relative gap required for a branch to be expanded."
     xi::Float64                             = 0.95
+
+    "The δ-packing of beliefs will be generated."
+    delta::Float64                          = 0.1
 
     "State grid for adaptive particle filters"
     grid::StateGrid{N}                      = StateGrid()
 
-    "The initial number of particles at root."
-    m_init::Int                             = 30
+    "The minimum number of bins a belief occupies (at least 2)."
+    min_occupied_bins::Int                  = 2
 
-    "At most sigma times of m_init particles are allowed for estimating a belief."
-    sigma::Float64                          = 2.0
+    "The maximum number of bins a belief occupies (default to the grid size)."
+    max_occupied_bins::Int                  = prod(size(grid))
+
+    "The number of particles used for generating belief packing."
+    m_min::Int                              = 30
+
+    "The target error for belief estimation."
+    zeta::Float64                           = KLDSampleSize(min_occupied_bins, m_min)
+
+    "The maximum number of particles for belief estimation"
+    m_max::Int                              = max(ceil(Int, KLDSampleSize(max_occupied_bins, zeta)), m_min)
 
     "Resample when the design effect of a belief node exceed Deff_thres"
     Deff_thres::Float64                     = 2.0
@@ -185,10 +191,11 @@ function AdaOPSPlanner(sol::AdaOPSSolver{N}, pomdp::POMDP{S,A,O}) where {S,A,O,N
     rng = deepcopy(sol.rng)
     bounds = init_bounds(sol.bounds, pomdp, sol, rng)
     discounts = discount(pomdp) .^[0:(sol.max_depth+1);]
+    @assert sol.m_max >= sol.m_min
 
-    m_min = sol.m_init
-    m_max = ceil(Int, sol.sigma * m_min)
-    access_cnt = sol.grid !== nothing ? zeros_like(sol.grid) : Int[]
+    m_min = sol.m_min
+    m_max = sol.m_max
+    access_cnt = zeros_like(sol.grid)
     norm_w = Vector{Float64}[Vector{Float64}(undef, m_min) for i in 1:m_max]
     return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, 
                         WeightedParticleBelief(Vector{S}(undef, m_max), ones(m_max), m_max), sizehint!(O[], m_max),

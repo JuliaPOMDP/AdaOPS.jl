@@ -1,12 +1,12 @@
 """
-KLDSampleSize(k::Int, ζ::Float64 = 0.1, η::Float64 = 0.05)
+KLDSampleSize(k::Int, ζ, η::Float64 = 0.05)
 
 Return the minimum sample size in order to achieve an error at most ζ with a 1-η level of confidence according to KLD-Sampling.
 """
-function KLDSampleSize(k::Int, ζ::Float64 = 0.1, η::Float64 = 0.05)
+function KLDSampleSize(k::Int, ζ, η::Float64 = 0.05)
     k = convert(Float64, k)
     if k <= 1.0
-        k = 1.2
+        k = 1.5
     end
     a = (k-1.0)/2.0
     b = 1.0/(a*9.0)

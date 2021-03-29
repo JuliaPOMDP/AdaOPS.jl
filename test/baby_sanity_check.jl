@@ -5,11 +5,11 @@ N = 50
 
 pomdp = BabyPOMDP()
 
-bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
-# bds = IndependentBounds(reward(pomdp, false, true)/(1-discount(pomdp)), 0.0)
+# bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
+bds = IndependentBounds(SemiPORollout(FeedWhenCrying()), 0.0)
 
 solver = AdaOPSSolver(epsilon_0=0.1,
-                      m_init=100,
+                      m_min=200,
                       max_depth=50,
                       bounds=bds,
                       T_max=Inf,

@@ -34,7 +34,7 @@ end
 POMDPs.action(p::AdaOPSPlanner{S,A}, b) where {S,A} = first(action_info(p, b))::A
 function POMDPs.updater(p::AdaOPSPlanner)
     sol = solver(p)
-    SIRParticleFilter(p.pomdp, ceil(Int, sol.m_init*sol.sigma*50), rng=p.rng)
+    SIRParticleFilter(p.pomdp, sol.m_max*50, rng=p.rng)
 end
 
 function Random.seed!(p::AdaOPSPlanner, seed)

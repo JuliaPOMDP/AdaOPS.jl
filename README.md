@@ -7,7 +7,7 @@
 [![codecov.io](http://codecov.io/github/LAMDA-POMDP/AdaOPS.jl/coverage.svg?branch=main)](http://codecov.io/github/LAMDA-POMDP/AdaOPS.jl?branch=main)
 
 
-An implementation of the AdaOPS (Adaptive Online Packing-based Search), which is an online POMDP Solver used to solve problems defined with the [POMDPs.jl generative interface](https://github.com/JuliaPOMDP/POMDPs.jl).
+An implementation of the AdaOPS (Adaptive Online Packing-guided Search), which is an online POMDP Solver used to solve problems defined with the [POMDPs.jl generative interface](https://github.com/JuliaPOMDP/POMDPs.jl).
 
 If you are trying to use this package and require more documentation, please file an issue!
 
@@ -45,24 +45,28 @@ Solver options can be found in the `AdaOPSSolver` docstring and accessed using [
 
 ### Adaptive Particle Filter
 The core idea of the adaptive particle filter is that it can change the number of particles adaptively and use more particles to estimate the belief when needed.
+#### m_max
+`m_max` is the maximum number of particles used for estimating a belief.
 #### zeta
-zeta is the targe error when estimating a belief. Spcifically, when we use KLD Sampling to calculate the number of particles needed, zeta is the targe Kullback-Leibler divergence between the estimated belief and the true belief.
-##### grid
-In order to estimate the belief, we first need know how many slices a belief is consist of. Therefore, we should first implement a function to convert a state to a multidimensional vector,
-`Base.convert(::SVector{D, Float64},::S)`, where `D` is the dimension of the resulted vector.
+`zeta` is the targe error when estimating a belief. Spcifically, we use KLD Sampling to calculate the number of particles needed, where `zeta` is the targe Kullback-Leibler divergence between the estimated belief and the true belief. In AdaOPS, `zeta` is automatically adjusted according to the grid size such that the maximum number of particles KLD-Sampling method suggests is exactly `m_max`.
+#### grid
+`grid` is used to split the state space into multidimensional bins, so that KLD-Sampling can estimate the particle numbers according to the number of bins occupied.
+First, a function for converting a state to a multidimensional vector should be implemented, i.e., `Base.convert(::Type{SVector{D, Float64}},::S)`, where `D` is the dimension of the resulted vector.
 Then, we define a StateGrid to discretize or split the state space.
-A StateGrid is consist of an arrays of cutpoints in each dimension. These cutpoints divide the whole space into small tiles. In each dimension, a number of intervals constitute the grid, and each of these intervals is left-closed and right-open with the endpoints be cutpoints with the exception of the left-most interval.
+A StateGrid is consist of a vector of cutpoints in each dimension. These cutpoints divide the whole space into small tiles. In each dimension, a number of intervals constitute the grid, and each of these intervals is left-closed and right-open with the endpoints be cutpoints with the exception of the left-most interval.
 For example, a StateGrid can be defined as `StateGrid([dim1_cutpoints], [dim2_cutpoints], [dim3_cutpoints])`.
 All states lie in one tile will be taken as the same.
 With the number of tiles occupied, we can estimate the number of particles using KLD-Sampling.
-#### sigma
-`sigma` is the maximum times of `m_init` particles we can afford to estimate a belief. Since `AdaOPS` is an online planning algorithm, we must balance between the accuracy and the speed.
+##### max_occupied_bins
+`max_occupied_bins` is the maximum number of bins occupied by a belief. Normally, it is exactly the grid size. However, in some domains, such as Roomba, only states within the room is accessible, and the corresponding bins will never be occupied.
+##### min_occupied_bins
+`min_occupied_bins` is the minimum number of bins occupied by a belief. Normally, it default to 2. A belief occupying `min_occupied_bins` tiles will be estimated with `m_min` particles. Increasing `min_occupied_bins` indicates that a belief need to occupy more bins so as to be estimated by the same amount of particles.
 
 ### Belief Packing
 #### delta
 A δ-packing of observation branches will be generated, i.e., the belief nodes with L1 distance less than delta are merged.
-#### m_init
-`m_init` is the least number of particles needed to estimate a belief. Only when a belief is consist of at least `m_init`, we can estimate the L1 distance between observation branches and merge the similar ones.
+#### m_min
+`m_min` is the number of particles used for estimating the L1 between beliefs. In practice, we propose an empirical formula for deciding `m_min`, which is `m_min=0.5*m_max*exp(-delta)`
 ### Bounds
 
 #### Dependent bounds
@@ -133,34 +137,17 @@ Two utilities, namely `info_analysis` and `hist_analysis`, are provided for gett
 ```julia
 using POMDPs, AdaOPS, RockSample, POMDPSimulators, ParticleFilters, POMDPModelTools
 
-function rsgen(map)
-    possible_ps = [(i, j) for i in 1:map[1], j in 1:map[1]]
-    selected = unique(rand(possible_ps, map[2]))
-    while length(selected) != map[2]
-        push!(selected, rand(possible_ps))
-        selected = unique!(selected)
-    end
-    return RockSamplePOMDP(map_size=(map[1],map[1]), rocks_positions=selected)
-end
-
-struct MoveEast<:Policy end
-POMDPs.action(p::MoveEast, b) = 2
-move_east = MoveEast()
-
-map = (11, 11)
-m = rsgen(map)
+m = RockSamplePOMDP(11, 11)
 
 b0 = initialstate(m)
 s0 = rand(b0)
 
-bound = AdaOPS.IndependentBounds(FORollout(move_east), map[2]*10.0, check_terminal=true, consistency_fix_thresh=1e-5)
+bound = AdaOPS.IndependentBounds(FORollout(RSExitSolver()), FOValue(RSMDPSolver()), check_terminal=true, consistency_fix_thresh=1e-5)
 
 solver = AdaOPSSolver(bounds=bound,
                         delta=0.3,
-                        m_init=30,
-                        sigma=3.0,
-                        bounds_warnings=true,
-                        default_action=move_east,
+                        m_min=30,
+                        m_max=200,
                         tree_in_info=true,
                         num_b=10_000
                         )
