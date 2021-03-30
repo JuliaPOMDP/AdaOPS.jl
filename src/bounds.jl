@@ -3,7 +3,7 @@ function bounds_sanity_check(pomdp::P, b::WPFBelief{S}, L::Float64, U::Float64) 
         @warn(@sprintf("L (%-4.1f) > U (%-4.1f)", L, U))
         @info("Try e.g. `IndependentBounds(l, u, consistency_fix_thresh=1e-5)`.", maxlog=1)
     end
-    if (L !== 0.0 || U !== 0.0) && all(isterminal(pomdp, particle(b, i)) for i in 1:n_particles(b) if weight(b, i) > 0.0)
+    if (L != 0.0 || U != 0.0) && all(isterminal(pomdp, particle(b, i)) for i in 1:n_particles(b) if weight(b, i) > 0.0)
         error(@sprintf("If all states are terminal, lower and upper bounds should be zero (L=%-4.1g, U=%-4.1g). (try IndependentBounds(l, u, check_terminal=true))", L, U))
     end
     if isinf(L) || isnan(L)
@@ -101,7 +101,7 @@ function bounds!(L::Vector{Float64}, U::Vector{Float64}, bds::IndependentBounds{
     if bds.check_terminal
         @inbounds for i in eachindex(W)
             w = W[i]
-            if (L[i] !== 0.0 || U[i] !== 0.0) && all(isterminal(pomdp, particle(b, j)) for j in 1:n_particles(b) if w[j] > 0.0)
+            if (L[i] != 0.0 || U[i] != 0.0) && all(isterminal(pomdp, particle(b, j)) for j in 1:n_particles(b) if w[j] > 0.0)
                 L[i] = 0.0
                 U[i] = 0.0
             end

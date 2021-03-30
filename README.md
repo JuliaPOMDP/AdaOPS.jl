@@ -43,12 +43,14 @@ For minimal examples of problem implementations, see [this notebook](https://git
 
 Solver options can be found in the `AdaOPSSolver` docstring and accessed using [Julia's built in documentation system](https://docs.julialang.org/en/v1/manual/documentation/#Accessing-Documentation-1) (or directly in the [Solver source code](/src/AdaOPS.jl)). Each option has its own docstring and can be set with a keyword argument in the `AdaOPSSolver` constructor.
 
+### Belief Packing
+#### delta
+A δ-packing of observation branches will be generated, i.e., the belief nodes with L1 distance less than delta are merged.
+#### m_min
+`m_min` is the number of particles used for estimating the L1 between beliefs.
+
 ### Adaptive Particle Filter
 The core idea of the adaptive particle filter is that it can change the number of particles adaptively and use more particles to estimate the belief when needed.
-#### m_max
-`m_max` is the maximum number of particles used for estimating a belief.
-#### zeta
-`zeta` is the targe error when estimating a belief. Spcifically, we use KLD Sampling to calculate the number of particles needed, where `zeta` is the targe Kullback-Leibler divergence between the estimated belief and the true belief. In AdaOPS, `zeta` is automatically adjusted according to the grid size such that the maximum number of particles KLD-Sampling method suggests is exactly `m_max`.
 #### grid
 `grid` is used to split the state space into multidimensional bins, so that KLD-Sampling can estimate the particle numbers according to the number of bins occupied.
 First, a function for converting a state to a multidimensional vector should be implemented, i.e., `Base.convert(::Type{SVector{D, Float64}},::S)`, where `D` is the dimension of the resulted vector.
@@ -56,19 +58,17 @@ Then, we define a StateGrid to discretize or split the state space.
 A StateGrid is consist of a vector of cutpoints in each dimension. These cutpoints divide the whole space into small tiles. In each dimension, a number of intervals constitute the grid, and each of these intervals is left-closed and right-open with the endpoints be cutpoints with the exception of the left-most interval.
 For example, a StateGrid can be defined as `StateGrid([dim1_cutpoints], [dim2_cutpoints], [dim3_cutpoints])`.
 All states lie in one tile will be taken as the same.
-With the number of tiles occupied, we can estimate the number of particles using KLD-Sampling.
+With the number of tiles (bins) occupied, we can estimate the number of particles using KLD-Sampling.
 ##### max_occupied_bins
 `max_occupied_bins` is the maximum number of bins occupied by a belief. Normally, it is exactly the grid size. However, in some domains, such as Roomba, only states within the room is accessible, and the corresponding bins will never be occupied.
 ##### min_occupied_bins
 `min_occupied_bins` is the minimum number of bins occupied by a belief. Normally, it default to 2. A belief occupying `min_occupied_bins` tiles will be estimated with `m_min` particles. Increasing `min_occupied_bins` indicates that a belief need to occupy more bins so as to be estimated by the same amount of particles.
+#### m_max
+`m_max` is the maximum number of particles used for estimating a belief. Normally, `m_max` is set to be big enough so that KLD-Sampling determines the number of particles used. When the KLD-Sampling is disabled, i.e. `grid=StateGrid{0}([])`, `m_max` will be sampled during the resampling.
+#### zeta
+`zeta` is the target error when estimating a belief. Spcifically, we use KLD Sampling to calculate the number of particles needed, where `zeta` is the targe Kullback-Leibler divergence between the estimated belief and the true belief. In AdaOPS, `zeta` is automatically adjusted according to the minimum number of bins occupied such that the minimum number of particles KLD-Sampling method suggests is exactly `m_min`.
 
-### Belief Packing
-#### delta
-A δ-packing of observation branches will be generated, i.e., the belief nodes with L1 distance less than delta are merged.
-#### m_min
-`m_min` is the number of particles used for estimating the L1 between beliefs. In practice, we propose an empirical formula for deciding `m_min`, which is `m_min=0.5*m_max*exp(-delta)`
 ### Bounds
-
 #### Dependent bounds
 The bound passed into `AdaOPSSolver` can be a function in the form of `lower_bound, upper_bound = f(pomdp, wpf_belief)`, or any other objects for which a `AdaOPS.bounds(obj::OBJECT, pomdp::POMDP, b::WPFBelief, max_depth::Int, bounds_warning::Bool)` function is implemented.
 
