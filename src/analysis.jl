@@ -18,7 +18,7 @@ function info_analysis(info::Dict)
     return nothing
 end
 
-function hist_analysis(hist::H) where H<:AbstractSimHistory
+function hist_analysis(hist::H, display_mean_and_std::Bool = false) where H<:AbstractSimHistory
     infos = ainfo_hist(hist)
 
     median_d = Float64[]
@@ -37,7 +37,9 @@ function hist_analysis(hist::H) where H<:AbstractSimHistory
         push!(std_d, std(depth))
     end
     p1 = plot(median_d, ribbon=(lower_d, upper_d), xaxis="Steps", yaxis="Depth of exploration", label="quantile")
-    plot!(p1, mean_d, ribbon=std_d, label="mean", legend=:best)
+    if display_mean_and_std
+        plot!(p1, mean_d, ribbon=std_d, label="mean", legend=:best)
+    end
 
     D = get(first(infos), :tree, nothing)
     if D === nothing
@@ -79,9 +81,11 @@ function hist_analysis(hist::H) where H<:AbstractSimHistory
         end
         p2 = plot(hcat(num_anode,num_bnode), label=["Action" "Belief"], xaxis="Steps", yaxis="Nodes expanded", legend=:best)
         p3 = plot(median_m, ribbon=(lower_m, upper_m), xaxis="Steps", yaxis="Particles used", label="quantile")
-        plot!(p3, mean_m, ribbon=std_m, label="mean", legend=:best)
         p4 = plot(median_branch, ribbon=(lower_branch, upper_branch), xaxis="Steps", yaxis="Obs. Num.", label="quantile")
-        plot!(p4, mean_branch, ribbon=std_branch, label="mean", legend=:best)
+        if display_mean_and_std
+            plot!(p3, mean_m, ribbon=std_m, label="mean", legend=:best)
+            plot!(p4, mean_branch, ribbon=std_branch, label="mean", legend=:best)
+        end
         display(plot(p1, p2, p3, p4, layout = (2, 2)))
     end
     return nothing
