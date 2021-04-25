@@ -1,10 +1,6 @@
 function AdaOPSTree(p::AdaOPSPlanner{S,A,O}, b0::RB) where {S,A,O,RB}
     sol = solver(p)
-    num_b = sol.num_b
-    num_ba = num_b
-    num_a = length(actions(p.pomdp))
-    m_max = sol.m_max
-    belief = resample!(p.resampled, b0, p.pomdp, p.rng)
+    belief = resample!(b0, p)
 
     if sol.tree_in_info || p.tree === nothing
         p.tree = AdaOPSTree([Float64[]],
@@ -28,8 +24,8 @@ function AdaOPSTree(p::AdaOPSPlanner{S,A,O}, b0::RB) where {S,A,O,RB}
                         1,
                         0
                     )
-        resize_b!(p.tree, num_b)
-        resize_ba!(p.tree, num_ba)
+        resize_b!(p.tree, sol.num_b)
+        resize_ba!(p.tree, sol.num_b)
     else
         reset!(p.tree, belief)
     end
@@ -49,7 +45,7 @@ function reset!(tree::AdaOPSTree, b0::WeightedParticleBelief)
 end
 
 function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
-    belief, resampled = get_belief(D, b, p)
+    belief = get_belief(D, b, p)
     if weight_sum(belief) == 0.0
         return -D.l[b], -D.u[b]
     end
@@ -63,7 +59,7 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     D.children[b] = (D.ba+1):(D.ba+num_a)
     for a in acts
         empty_buffer!(p)
-        P, Rsum = propagate_particles(D, belief, a, resampled, p)
+        P, Rsum = propagate_particles(D, belief, a, p)
         gen_packing!(D, P, belief, a, p)
 
         D.ba += 1 # increase ba count
@@ -104,7 +100,7 @@ end
 
 function get_belief(D::AdaOPSTree{S}, b::Int, p::AdaOPSPlanner{S}) where S
     if b === 1
-        return D.root_belief::WeightedParticleBelief{S}, true
+        return D.root_belief
     end
     P = D.ba_particles[D.parent[b]]
     W = D.weights[b]
@@ -117,9 +113,9 @@ function get_belief(D::AdaOPSTree{S}, b::Int, p::AdaOPSPlanner{S}) where S
         end
     end
     if w_sum != 0.0 && DesignEffect(D, b) > solver(p).Deff_thres
-        return resample!(p.resampled, WeightedParticleBelief(P, W, w_sum), p.rng)::WeightedParticleBelief{S}, true
+        return resample!(WeightedParticleBelief(P, W, w_sum), p)
     else
-        return WeightedParticleBelief(P, W, w_sum)::WeightedParticleBelief{S}, false
+        return WeightedParticleBelief(P, W, w_sum)
     end
 end
 
@@ -134,51 +130,80 @@ function empty_buffer!(p::AdaOPSPlanner)
     empty!(p.obs)
     empty!(p.obs_ind_dict)
     empty!(p.w)
-    fill!(p.access_cnt, 0)
     empty!(p.obs_w)
     empty!(p.u)
     empty!(p.l)
     return nothing
 end
 
-function propagate_particles(D::AdaOPSTree{S,A,O}, belief::WeightedParticleBelief{S}, a::A, resampled::Bool, p::AdaOPSPlanner{S,A,O,M,N}) where {S,A,O,M<:POMDP{S,A,O},N}
-    sol = solver(p)
-    m_min = sol.m_min
-    m_max = n_particles(belief)
+function resample!(b::B, p::AdaOPSPlanner{S,A,O,M,N}) where {B,S,A,O,M<:POMDP{S,A,O},N}
+    if N == 0
+        # the number of resampled particles is default to p.sol.m_max
+        return resample!(p.resampled, b, p.pomdp, p.rng)
+    else
+        fill!(p.access_cnt, 0)
+        return kld_resample!(b, p)
+    end
+end
 
-    Φ = particles(belief)
+function kld_resample!(b::AbstractParticleBelief{S}, p::AdaOPSPlanner{S}) where S
+    sol = solver(p)
+    k = 0
+    for s in particles(b)
+        k += access(sol.grid, p.access_cnt, s, p.pomdp)
+    end
+    m = clamp(ceil(Int, KLDSampleSize(k, sol.zeta)), sol.m_min, sol.m_max)
+    resize!(p.resampled, m)
+    return resample!(p.resampled, b, p.pomdp, p.rng)
+end
+
+function kld_resample!(b::B, p::AdaOPSPlanner{S}) where {B,S}
+    sol = solver(p)
+    m_max = sol.m_max
+    P_resampled = particles(p.resampled)
+    resize!(P_resampled, m_max)
+    rng = p.rng
+
+    n = 0
+    m = sol.m_min
+    k = 0
+    while n < m
+        for i in (n+1):m
+            s = rand(rng, b)
+            while isterminal(p.pomdp, s)
+                s = rand(rng, b)
+            end
+            P_resampled[i] = s
+            k += access(sol.grid, p.access_cnt, s, p.pomdp)
+        end
+        n = m
+        m = min(m_max, ceil(Int, KLDSampleSize(k, sol.zeta)))
+    end
+    resize!(p.resampled, n)
+    return p.resampled
+end
+
+function propagate_particles(D::AdaOPSTree{S,A,O}, belief::WeightedParticleBelief{S}, a::A, p::AdaOPSPlanner{S,A,O}) where {S,A,O}
     P = D.ba_particles[D.ba+1]
 
     Rsum = 0.0
     k = 0 # number of multidimensional bins occupied
-    n = 0 # number of particles used 
-    # if the adaptive particle filter is disabled or the resampling criterion is not met, propagate all particles forward
-    m = (N == 0 || !resampled) ? m_max : m_min # number of needed particles
-    while n < m
-        for i in (n+1):m
-            w = weight(belief, i)
-            if w == 0.0
-                push!(P, Φ[i])
+    for (i, s) in enumerate(particles(belief))
+        w = weight(belief, i)
+        if w == 0.0
+            push!(P, s)
+        else
+            sp, o, r = @gen(:sp, :o, :r)(p.pomdp, s, a, p.rng)
+            Rsum += w * r
+            push!(P, sp)
+            obs_ind = get(p.obs_ind_dict, o, 0)
+            if obs_ind !== 0
+                p.obs_w[obs_ind] += w
             else
-                sp, o, r = @gen(:sp, :o, :r)(p.pomdp, Φ[i], a, p.rng)
-                Rsum += w * r
-                push!(P, sp)
-                obs_ind = get(p.obs_ind_dict, o, 0)
-                if obs_ind !== 0
-                    p.obs_w[obs_ind] += w
-                else
-                    push!(p.obs_w, w)
-                    push!(p.obs, o)
-                    p.obs_ind_dict[o] = length(p.obs)
-                end
-                if resampled && N !== 0 && access(sol.grid, p.access_cnt, P[i], p.pomdp)
-                    k += 1
-                end
+                push!(p.obs_w, w)
+                push!(p.obs, o)
+                p.obs_ind_dict[o] = length(p.obs)
             end
-        end
-        n = m
-        if N !== 0
-            m = min(m_max, ceil(Int, KLDSampleSize(k, sol.zeta)))
         end
     end
     return P::Vector{S}, Rsum::Float64
@@ -241,6 +266,12 @@ function in_packing(norm_w::Vector{Float64}, W::AbstractVector{Vector{Float64}},
         end
     end
     return 0
+end
+
+function Base.resize!(b::WeightedParticleBelief, n::Int)
+    resize!(particles(b), n)
+    resize!(weights(b), n)
+    b.weight_sum = n
 end
 
 function resize_b!(D::AdaOPSTree, n::Int)
