@@ -136,8 +136,8 @@ Further information can be found in the field docstrings (e.g.
     "If true, a reprenstation of the constructed DESPOT is returned by POMDPModelTools.action_info."
     tree_in_info::Bool                      = false
 
-    "Issue an warning when the planning time surpass the time limit by `over_time_warning_threshold` times"
-    overtime_warning_threshold::Float64     = 2.0
+    "Issue an warning when the planning time surpass the time limit by `timeout_warning_threshold` times"
+    timeout_warning_threshold::Float64     = T_max * 2.0
 
     "Number of pre-allocated belief nodes"
     num_b::Int                              = 50_000

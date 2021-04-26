@@ -12,10 +12,11 @@ function build_tree(p::AdaOPSPlanner, b0)
         push!(Depth, explore!(D, 1, p))
         trial += 1
     end
-    if (CPUtime_us()-start)*1e-6 > sol.T_max*sol.overtime_warning_threshold
-        @warn(@sprintf("Surpass the time limit. The actual runtime is %3.1fs, 
-        delta=%4.2f, m_min=%3d, m_max=%3d, zeta=%4.2f, grid=%s, bounds=%s",
-        (CPUtime_us()-start)*1e-6, sol.delta, sol.m_min, sol.m_max, sol.zeta, typeof(sol.grid), typeof(sol.bounds)))
+    if (CPUtime_us()-start)*1e-6 > sol.T_max*sol.timeout_warning_threshold
+        @warn(@sprintf("Surpass the time limit. The actual runtime is %3.1fs.
+        Times of explorations: %d.
+        Hyperparameters: delta=%4.2f, m_min=%3d, m_max=%3d, zeta=%4.2f, grid=%s, bounds=%s",
+        (CPUtime_us()-start)*1e-6, length(Depth), sol.delta, sol.m_min, sol.m_max, sol.zeta, typeof(sol.grid), typeof(sol.bounds)))
     end
     return D, Depth
 end
@@ -41,6 +42,7 @@ end
 function backup!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, Δl::Float64, Δu::Float64)
     D.u[b] += Δu
     D.l[b] += Δl
+    disc = discount(p.pomdp)
     best_a_change = false
     while b != 1
         bp = b
@@ -48,9 +50,16 @@ function backup!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, Δl::Float64, Δu::Flo
         b = D.ba_parent[ba]
 
         # Update u
-        D.ba_u[ba] += discount(p.pomdp) * D.obs_prob[bp] * Δu
-        largest_u = maximum(D.ba_u[ba] for ba in D.children[b])
-        if D.ba_u[ba] < largest_u
+        D.ba_u[ba] += disc * D.obs_prob[bp] * Δu
+        largest_u = -Inf
+        largest_ba = 0
+        for ba in D.children[b]
+            if D.ba_u[ba] > largest_u
+                largest_u = D.ba_u[ba]
+                largest_ba = ba
+            end
+        end
+        if largest_ba != ba
             best_a_change = true
         end
         Δu = largest_u - D.u[b]
@@ -58,11 +67,10 @@ function backup!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner, Δl::Float64, Δu::Flo
 
         # Update l
         if Δl != 0.0
-            D.ba_l[ba] += discount(p.pomdp) * D.obs_prob[bp] * Δl
+            D.ba_l[ba] += disc * D.obs_prob[bp] * Δl
             if D.l[b] < D.ba_l[ba]
-                largest_l = D.ba_l[ba]
-                Δl = largest_l - D.l[b]
-                D.l[b] = largest_l
+                Δl = D.ba_l[ba] - D.l[b]
+                D.l[b] = D.ba_l[ba]
             else
                 Δl = 0.0
             end
