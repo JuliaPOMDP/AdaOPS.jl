@@ -99,13 +99,13 @@ Further information can be found in the field docstrings (e.g.
     "The maximum number of bins a belief occupies (default to the grid size)."
     max_occupied_bins::Int                  = prod(size(grid))
 
-    "The number of particles used for generating belief packing."
+    "The minimum number of particles for approximating beliefs"
     m_min::Int                              = 30
 
     "The target error for belief estimation."
     zeta::Float64                           = KLDSampleSize(min_occupied_bins, m_min)
 
-    "The maximum number of particles for belief estimation"
+    "The maximum number of particles for approximating beliefs"
     m_max::Int                              = max(ceil(Int, KLDSampleSize(max_occupied_bins, zeta)), m_min)
 
     "Resample when the design effect of a belief node exceed Deff_thres"

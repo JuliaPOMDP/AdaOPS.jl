@@ -1,7 +1,7 @@
 name = "AdaOPS"
 uuid = "eadfb9d8-44f1-454c-a5eb-0663ee7d74a1"
 repo = "git@github.com:LAMDA-POMDP/AdaOPS.jl.git"
-version = "0.4.2"
+version = "0.5.1"
 
 [deps]
 BasicPOMCP = "d721219e-3fc6-5570-a8ef-e5402f47c49e"
@@ -30,7 +30,7 @@ BeliefUpdaters = "0.2"
 CPUTime = "1"
 D3Trees = "0.3"
 Distances = "0.9, 0.10"
-Distributions = "0.22 - 0.24"
+Distributions = "0.22 - 0.25"
 MCTS = "0.4"
 POMDPLinter = "0.1"
 POMDPModelTools = "0.3"
