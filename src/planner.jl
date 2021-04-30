@@ -33,7 +33,7 @@ function explore!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
         b = next_best(D, b, p)
     end
     if D.Delta[b] == sol.max_depth
-        backup!(D, b, p, -D.u[b], -D.l[b])
+        backup!(D, b, p, -D.l[b], -D.u[b])
     end
 
     return D.Delta[b]

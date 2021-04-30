@@ -1,5 +1,9 @@
 function AdaOPSTree(p::AdaOPSPlanner{S,A,O}, b0::RB) where {S,A,O,RB}
     sol = solver(p)
+    b0, w_sum = strip_terminals(b0, p.pomdp)
+    if w_sum == 0.0
+        error("All states in the current belief are terminal.")
+    end
     belief = resample!(b0, p)
 
     if sol.tree_in_info || p.tree === nothing
@@ -100,21 +104,30 @@ function get_belief(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     if b === 1
         return D.root_belief
     end
-    P = D.ba_particles[D.parent[b]]
-    W = D.weights[b]
+    belief, w_sum = strip_terminals(WeightedParticleBelief(D.ba_particles[D.parent[b]], D.weights[b]), p.pomdp)
+    if w_sum != 0.0 && DesignEffect(D, b) > solver(p).Deff_thres
+        return resample!(belief, p)
+    else
+        return belief
+    end
+end
+
+function strip_terminals(b, m::POMDP)
+    return b, 1.0
+end
+
+function strip_terminals(b::AbstractParticleBelief, m::POMDP)
     w_sum = 0.0
-    @inbounds for i in eachindex(P)
-        if isterminal(p.pomdp, P[i])
+    P = particles(b)
+    W = weights(b)
+    @inbounds for (i, s) in enumerate(P)
+        if isterminal(m, s)
             W[i] = 0.0
         else
             w_sum += W[i]
         end
     end
-    if w_sum != 0.0 && DesignEffect(D, b) > solver(p).Deff_thres
-        return resample!(WeightedParticleBelief(P, W, w_sum), p)
-    else
-        return WeightedParticleBelief(P, W, w_sum)
-    end
+    return WeightedParticleBelief(P, W, w_sum), w_sum
 end
 
 function DesignEffect(D::AdaOPSTree, b::Int)
@@ -210,28 +223,25 @@ end
 
 function gen_packing!(D::AdaOPSTree, S, O, belief::WeightedParticleBelief, a, p::AdaOPSPlanner)
     sol = solver(p)
-    m_min = sol.m_min
-    m_max = length(S)
+    m = length(S)
     w = weights(belief)
 
     next_obs = 1 # denote the index of the next observation branch
     for i in eachindex(O)
-        w′ = resize!(D.weights[D.b+next_obs], m_min)
+        w′ = resize!(D.weights[D.b+next_obs], m)
         o = O[i]
-        # reweight first m_min particles
-        reweight!(w′, view(w, 1:m_min), view(S, 1:m_min), a, o, p.pomdp)
+        reweight!(w′, w, S, a, o, p.pomdp)
         # check if the observation is already covered by the packing
-        norm_w = p.norm_w[next_obs]
-        norm_w .= w′ ./ sum(w′)
-        obs_ind = in_packing(norm_w, view(p.norm_w, 1:(next_obs-1)), sol.delta)
-        if obs_ind !== 0
+        w′ .= w′ ./ sum(w′)
+        obs_ind = in_packing(w′, p.w, sol.delta)
+        if obs_ind != 0
             # merge the new obs into an existing obs
             p.obs_w[obs_ind] += p.obs_w[i]
         else
             # add the new obs into the packing
             p.obs_w[next_obs] = p.obs_w[i]
             O[next_obs] = o
-            push!(p.w, resize!(w′, m_max))
+            push!(p.w, w′)
             next_obs += 1
         end
     end
@@ -239,10 +249,6 @@ function gen_packing!(D::AdaOPSTree, S, O, belief::WeightedParticleBelief, a, p:
     n_obs = length(p.w)
     resize!(O, n_obs)
     resize!(p.obs_w, n_obs)
-
-    for i in eachindex(p.w)
-        reweight!(view(p.w[i], (m_min+1):m_max), view(w, (m_min+1):m_max), view(S, (m_min+1):m_max), a, O[i], p.pomdp)
-    end
 
     return nothing
 end

@@ -80,7 +80,7 @@ Further information can be found in the field docstrings (e.g.
 """
 @with_kw struct AdaOPSSolver{N, R<:AbstractRNG} <: Solver
     "The target gap between the upper and the lower bound at the root of the AdaOPS tree."
-    epsilon_0::Float64                      = 0.0
+    epsilon_0::Float64                      = 1e-3
 
     "The minimum relative gap required for a branch to be expanded."
     xi::Float64                             = 0.95
