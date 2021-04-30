@@ -47,6 +47,8 @@ export
 
     StateGrid,
     KLDSampleSize,
+    zeros_like,
+    access,
 
     info_analysis,
     hist_analysis

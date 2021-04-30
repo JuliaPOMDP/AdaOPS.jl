@@ -14,9 +14,9 @@ function build_tree(p::AdaOPSPlanner, b0)
     end
     if (CPUtime_us()-start)*1e-6 > sol.T_max*sol.timeout_warning_threshold
         @warn(@sprintf("Surpass the time limit. The actual runtime is %3.1fs.
-        Times of explorations: %d.
         Hyperparameters: delta=%4.2f, m_min=%3d, m_max=%3d, zeta=%4.2f, grid=%s, bounds=%s",
-        (CPUtime_us()-start)*1e-6, length(Depth), sol.delta, sol.m_min, sol.m_max, sol.zeta, typeof(sol.grid), typeof(sol.bounds)))
+        (CPUtime_us()-start)*1e-6, sol.delta, sol.m_min, sol.m_max, sol.zeta, typeof(sol.grid), typeof(sol.bounds)))
+        info_analysis(Dict(:tree=>D, :depth=>Depth))
     end
     return D, Depth
 end

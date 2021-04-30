@@ -16,15 +16,17 @@ include("independent_bounds.jl")
 
 pomdp = BabyPOMDP()
 pomdp.discount = 1.0
-p = solve(AdaOPSSolver(), pomdp)
+p = solve(AdaOPSSolver(tree_in_info=true), pomdp)
+Random.seed!(p, 1)
 
 K = 10
 b0 = initialstate(pomdp)
 o = false
 tval = 7.0
-tree = AdaOPSTree(p, b0)
-tree.obs[1] = o
-b = WPFBelief([rand(b0)], [1.0], 1, 0, tree, o)
+a, info = action_info(p, b0)
+tree = info[:tree]
+tree.obs[2] = o
+b = WPFBelief([rand(b0)], [1.0], 2, 1, tree, o)
 
 pol = FeedWhenCrying()
 rng = MersenneTwister(2)
@@ -47,6 +49,7 @@ rng = MersenneTwister(2)
     @test weight(b, 1) == 1.0
     @test currentobs(b) == o
     @test history(b)[end].o == o
+    @test initialize_belief(KMarkovUpdater(2), b)[end] == o
 end
 
 # Light Dark Test
@@ -62,6 +65,7 @@ solver = AdaOPSSolver(bounds=bds,
                     tree_in_info=true
                     )
 planner = solve(solver, pomdp)
+action(planner, initialstate(pomdp))
 hr = HistoryRecorder(max_steps=50)
 @time hist = simulate(hr, pomdp, planner)
 hist_analysis(hist)
@@ -71,7 +75,7 @@ println("Discounted reward is $(discounted_reward(hist))")
 Base.convert(::Type{SVector{1,Float64}}, s::Bool) = SVector{1,Float64}(s)
 # Type stability
 pomdp = BabyPOMDP()
-bds = IndependentBounds(PORollout(FeedWhenCrying(), PreviousObservationUpdater()), 0.0)
+bds = (pomdp, b)->(reward(pomdp, true, false)/(1-discount(pomdp)), 0.0)
 solver = AdaOPSSolver(bounds=bds,
                       rng=MersenneTwister(4),
                       m_min=100,

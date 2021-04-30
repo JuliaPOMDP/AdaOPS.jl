@@ -51,7 +51,7 @@ function POMDPs.history(belief::WPFBelief{S,A,O}) where {S,A,O}
             while depth !== 1
                 ba = D.parent[b]
                 belief._hist[depth] = (o=D.obs[b], a=D.ba_action[ba])
-                b = D.parent_b[ba]
+                b = D.ba_parent[ba]
                 depth -= 1
             end
         end
@@ -60,7 +60,7 @@ function POMDPs.history(belief::WPFBelief{S,A,O}) where {S,A,O}
     return belief._hist
 end
 
-function resample!(resampled::WeightedParticleBelief{S}, b::AbstractParticleBelief{S}, rng::AbstractRNG) where S
+function resample!(resampled::WeightedParticleBelief, b::AbstractParticleBelief, pomdp::POMDP, rng::AbstractRNG)
     m = n_particles(resampled)
     step = weight_sum(b)/m
     U = rand(rng)*step
@@ -79,7 +79,7 @@ function resample!(resampled::WeightedParticleBelief{S}, b::AbstractParticleBeli
     return resampled
 end
 
-function resample!(resampled::WeightedParticleBelief{S}, b::B, pomdp::POMDP{S}, rng::AbstractRNG) where {S,B}
+function resample!(resampled::WeightedParticleBelief, b, pomdp::POMDP, rng::AbstractRNG)
     m = n_particles(resampled)
     i = 0
     P_resampled = particles(resampled)
