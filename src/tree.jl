@@ -64,7 +64,7 @@ function expand!(D::AdaOPSTree, b::Int, p::AdaOPSPlanner)
     for a in acts
         empty_buffer!(p)
         S, O, R = propagate_particles(D, belief, a, p)
-        gen_packing!(D, S, O, belief, a, p)
+        gen_packing!(D, O, belief, p)
 
         D.ba += 1 # increase ba count
         n_obs = length(p.w) # number of new obs
@@ -207,6 +207,7 @@ function propagate_particles(D::AdaOPSTree, belief::WeightedParticleBelief, a, p
         else
             sp, o, r = @gen(:sp, :o, :r)(p.pomdp, s, a, p.rng)
             Rsum += w * r
+            p.obs_dists[i] = observation(p.pomdp, a, sp)
             push!(S, sp)
             obs_ind = get(p.obs_ind_dict, o, 0)
             if obs_ind !== 0
@@ -221,16 +222,16 @@ function propagate_particles(D::AdaOPSTree, belief::WeightedParticleBelief, a, p
     return S, O, Rsum/weight_sum(belief)
 end
 
-function gen_packing!(D::AdaOPSTree, S, O, belief::WeightedParticleBelief, a, p::AdaOPSPlanner)
+function gen_packing!(D::AdaOPSTree, O, belief::WeightedParticleBelief, p::AdaOPSPlanner)
     sol = solver(p)
-    m = length(S)
+    m = n_particles(belief)
     w = weights(belief)
 
     next_obs = 1 # denote the index of the next observation branch
     for i in eachindex(O)
         w′ = resize!(D.weights[D.b+next_obs], m)
         o = O[i]
-        reweight!(w′, w, S, a, o, p.pomdp)
+        reweight!(w′, w, o, p.obs_dists)
         # check if the observation is already covered by the packing
         w′ .= w′ ./ sum(w′)
         obs_ind = in_packing(w′, p.w, sol.delta)
@@ -253,13 +254,13 @@ function gen_packing!(D::AdaOPSTree, S, O, belief::WeightedParticleBelief, a, p:
     return nothing
 end
 
-function reweight!(w′::AbstractVector{Float64}, w::AbstractVector{Float64}, S::AbstractVector, a, o, m)
+function reweight!(w′::AbstractVector{Float64}, w::AbstractVector{Float64}, o, obs_dists)
     @inbounds for i in eachindex(w′)
         if w[i] == 0.0
             w′[i] = 0.0
         else
             # w′[i] = w[i] * obs_weight(m, Φ[i], a, S[i], o)
-            w′[i] = w[i] * pdf(observation(m, a, S[i]), o)
+            w′[i] = w[i] * pdf(obs_dists[i], o)
         end
     end
 end

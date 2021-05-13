@@ -170,7 +170,7 @@ mutable struct AdaOPSTree{S,A,O}
     ba::Int
 end
 
-mutable struct AdaOPSPlanner{S, A, O, P<:POMDP{S,A,O}, N, B, RNG<:AbstractRNG} <: Policy
+mutable struct AdaOPSPlanner{S, A, O, P<:POMDP{S,A,O}, N, B, OD, RNG<:AbstractRNG} <: Policy
     sol::AdaOPSSolver{N, RNG}
     pomdp::P
     bounds::B
@@ -186,6 +186,7 @@ mutable struct AdaOPSPlanner{S, A, O, P<:POMDP{S,A,O}, N, B, RNG<:AbstractRNG} <
     obs_w::Vector{Float64}
     u::Vector{Float64}
     l::Vector{Float64}
+    obs_dists::Vector{OD}
     tree::Union{Nothing, AdaOPSTree{S,A,O}}
 end
 
@@ -199,11 +200,12 @@ function AdaOPSPlanner(sol::AdaOPSSolver{N}, pomdp::POMDP{S,A,O}) where {S,A,O,N
     m_max = sol.m_max
     access_cnt = zeros_like(sol.grid)
     norm_w = Vector{Float64}[Vector{Float64}(undef, m_min) for i in 1:m_max]
+    obs_dists = Vector{typeof(observation(pomdp, first(actions(pomdp)), rand(initialstate(pomdp))))}(undef, m_max)
     return AdaOPSPlanner(deepcopy(sol), pomdp, bounds, discounts, rng, 
                         WeightedParticleBelief(Vector{S}(undef, m_max), ones(m_max), m_max), sizehint!(O[], m_max),
                         Dict{O, Int}(), sizehint!(Vector{Float64}[], m_max), norm_w, access_cnt,
                         sizehint!(Float64[], m_max), sizehint!(Float64[], m_max), sizehint!(Float64[], m_max),
-                        nothing)
+                        obs_dists, nothing)
 end
 
 solver(p::AdaOPSPlanner) = p.sol
