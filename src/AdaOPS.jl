@@ -17,6 +17,7 @@ using Statistics
 using StaticArrays
 using Distributions
 using Plots
+using Plots.PlotMeasures
 
 using MCTS
 import MCTS: convert_to_policy

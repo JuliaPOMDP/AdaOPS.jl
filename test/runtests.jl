@@ -10,6 +10,8 @@ using ParticleFilters
 using BeliefUpdaters
 using StaticArrays
 using POMDPPolicies
+using Plots
+theme(:mute)
 
 # include("baby_sanity_check.jl")
 include("independent_bounds.jl")
