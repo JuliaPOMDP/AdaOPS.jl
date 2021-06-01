@@ -12,16 +12,15 @@ An implementation of the AdaOPS (Adaptive Online Packing-guided Search), which i
 If you are trying to use this package and require more documentation, please file an issue!
 
 ## Installation
+Press `]` key to enter the package management mode of Julia. Then, execute the following code.
 
 ```julia
-using Pkg
 pkg> add "POMDPs"
 pkg> registry add "https://github.com/JuliaPOMDP/Registry.git"
 pkg> add AdaOPS
 ```
 
 ## Usage
-
 ```julia
 using POMDPs, POMDPModels, POMDPSimulators, AdaOPS
 
@@ -40,7 +39,6 @@ end
 For minimal examples of problem implementations, see [this notebook](https://github.com/JuliaPOMDP/BasicPOMCP.jl/blob/master/notebooks/Minimal_Example.ipynb) and [the POMDPs.jl generative docs](http://juliapomdp.github.io/POMDPs.jl/latest/generative/).
 
 ## Solver Options
-
 Solver options can be found in the `AdaOPSSolver` docstring and accessed using [Julia's built in documentation system](https://docs.julialang.org/en/v1/manual/documentation/#Accessing-Documentation-1) (or directly in the [Solver source code](/src/AdaOPS.jl)). Each option has its own docstring and can be set with a keyword argument in the `AdaOPSSolver` constructor.
 
 ### Belief Packing
@@ -64,7 +62,7 @@ With the number of tiles (bins) occupied, we can estimate the number of particle
 #### m_min
 `m_min` is the minimum number of particles used for approximating beliefs.
 #### m_max
-`m_max` is the maximum number of particles used for approximating a belief. Normally, `m_max` is set to be big enough so that KLD-Sampling determines the number of particles used. When the KLD-Sampling is disabled, i.e. `grid=StateGrid{0}([])`, `m_max` will be sampled during the resampling.
+`m_max` is the maximum number of particles used for approximating a belief. Normally, `m_max` is set to be big enough so that KLD-Sampling determines the number of particles used. When the KLD-Sampling is disabled, i.e. `grid=StateGrid()`, `m_max` will be sampled during the resampling.
 #### zeta
 `zeta` is the target error when estimating a belief. Spcifically, we use KLD Sampling to calculate the number of particles needed, where `zeta` is the targe Kullback-Leibler divergence between the estimated belief and the true belief. In AdaOPS, `zeta` is automatically adjusted according to the minimum number of bins occupied such that the minimum number of particles KLD-Sampling method suggests is exactly `m_min`.
 
