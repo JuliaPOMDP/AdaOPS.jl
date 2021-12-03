@@ -7,7 +7,7 @@
 [![codecov.io](http://codecov.io/github/LAMDA-POMDP/AdaOPS.jl/coverage.svg?branch=main)](http://codecov.io/github/LAMDA-POMDP/AdaOPS.jl?branch=main)
 
 
-An implementation of the AdaOPS (Adaptive Online Packing-guided Search), which is an online POMDP Solver used to solve problems defined with the [POMDPs.jl generative interface](https://github.com/JuliaPOMDP/POMDPs.jl).
+An implementation of the AdaOPS (Adaptive Online Packing-guided Search), which is an online POMDP Solver used to solve problems defined with the [POMDPs.jl generative interface](https://github.com/JuliaPOMDP/POMDPs.jl). The paper[https://openreview.net/forum?id=0zvTBoQb5PA] was published on NeurIPS'2021.
 
 If you are trying to use this package and require more documentation, please file an issue!
 
@@ -158,4 +158,14 @@ num_particles = 30000
 @time hist = simulate(HistoryRecorder(max_steps=90), m, adaops, SIRParticleFilter(m, num_particles), b0, s0)
 hist_analysis(hist)
 @show undiscounted_reward(hist)
+```
+
+## Reference
+```
+@inproceedings{wu2021adaptive,
+  title={Adaptive Online Packing-guided Search for POMDPs},
+  author={Wu, Chenyang and Yang, Guoyu and Zhang, Zongzhang and Yu, Yang and Li, Dong and Liu, Wulong and others},
+  booktitle={Thirty-Fifth Conference on Neural Information Processing Systems},
+  year={2021}
+}
 ```
