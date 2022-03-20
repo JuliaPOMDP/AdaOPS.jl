@@ -81,7 +81,7 @@ parameters match the definitions in the paper exactly.
 Further information can be found in the field docstrings (e.g.
 `?AdaOPSSolver.xi`)
 """
-@with_kw struct AdaOPSSolver{N, R<:AbstractRNG} <: Solver
+@with_kw struct AdaOPSSolver{N, R<:AbstractRNG, T} <: Solver
     "The target gap between the upper and the lower bound at the root of the AdaOPS tree."
     epsilon_0::Float64                      = 1e-3
 
@@ -140,7 +140,12 @@ Further information can be found in the field docstrings (e.g.
     tree_in_info::Bool                      = false
 
     "Issue an warning when the planning time surpass the time limit by `timeout_warning_threshold` times"
-    timeout_warning_threshold::Float64     = T_max * 2.0
+    timeout_warning_threshold::Float64      = T_max * 2.0
+
+    "Search iterations end when `timer() - start_time ≥ T_max`.
+    Default to `() -> 1e-9*time_ns()`, which gets the current system time.
+    Switch to `() -> 1e-6*CPUtime_us()` when the CPU time is concerned."
+    timer::T                                = () -> 1e-9*time_ns()
 
     "Number of pre-allocated belief nodes"
     num_b::Int                              = 50_000
