@@ -2,20 +2,20 @@ function build_tree(p::AdaOPSPlanner, b0)
     D = AdaOPSTree(p, b0)
     b = 1
     trial = 1
-    start = CPUtime_us()
 
     Depth = sizehint!(Int[], 2000)
     sol = solver(p)
+    start = sol.timer()
     while D.u[1]-D.l[1] > sol.epsilon_0 &&
-          CPUtime_us()-start < sol.T_max*1e6 &&
+          sol.timer()-start < sol.T_max &&
           trial <= sol.max_trials
         push!(Depth, explore!(D, 1, p))
         trial += 1
     end
-    if (CPUtime_us()-start)*1e-6 > sol.T_max*sol.timeout_warning_threshold
+    if sol.timer()-start > sol.timeout_warning_threshold
         @warn(@sprintf("Surpass the time limit. The actual runtime is %3.1fs.
         Hyperparameters: delta=%4.2f, m_min=%3d, m_max=%3d, zeta=%4.2f, grid=%s, bounds=%s",
-        (CPUtime_us()-start)*1e-6, sol.delta, sol.m_min, sol.m_max, sol.zeta, typeof(sol.grid), typeof(sol.bounds)))
+        sol.timer()-start, sol.delta, sol.m_min, sol.m_max, sol.zeta, typeof(sol.grid), typeof(sol.bounds)))
         info_analysis(Dict(:tree=>D, :depth=>Depth))
     end
     return D, Depth
