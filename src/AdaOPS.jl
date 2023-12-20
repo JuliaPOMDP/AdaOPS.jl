@@ -1,15 +1,13 @@
 module AdaOPS
 
 using POMDPs
-using BeliefUpdaters
+using POMDPTools
 using Parameters
 using CPUTime
 using ParticleFilters
 using D3Trees
 using Random
 using Printf
-using POMDPModelTools
-using POMDPSimulators
 using POMDPLinter
 using LinearAlgebra
 using Distances
@@ -136,7 +134,7 @@ Further information can be found in the field docstrings (e.g.
     "If true, sanity checks on the provided bounds are performed."
     bounds_warnings::Bool                   = false
 
-    "If true, a reprenstation of the constructed DESPOT is returned by POMDPModelTools.action_info."
+    "If true, a reprenstation of the constructed DESPOT is returned by POMDPTools.action_info."
     tree_in_info::Bool                      = false
 
     "Issue an warning when the planning time surpass the time limit by `timeout_warning_threshold` times"

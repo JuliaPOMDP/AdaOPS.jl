@@ -2,14 +2,11 @@ using AdaOPS
 using Test
 
 using POMDPs
+using POMDPTools
 using POMDPModels
-using POMDPSimulators
 using Random
-using POMDPModelTools
 using ParticleFilters
-using BeliefUpdaters
 using StaticArrays
-using POMDPPolicies
 using Plots
 theme(:mute)
 
@@ -127,7 +124,7 @@ hist_analysis(hist)
 println("Discounted reward is $(discounted_reward(hist))")
 
 # from README:
-using POMDPs, POMDPModels, POMDPSimulators, AdaOPS
+using POMDPs, POMDPModels, POMDPTools, AdaOPS
 
 pomdp = TigerPOMDP()
 

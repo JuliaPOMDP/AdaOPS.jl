@@ -22,7 +22,7 @@ pkg> add AdaOPS
 
 ## Usage
 ```julia
-using POMDPs, POMDPModels, POMDPSimulators, AdaOPS
+using POMDPs, POMDPModels, POMDPTools, AdaOPS
 
 pomdp = TigerPOMDP()
 
@@ -94,7 +94,7 @@ When using rollout-base bounds, you can specify `max_depth` keyword argument to 
 For the `BabyPOMDP` from `POMDPModels`, bounds setup might look like this:
 ```julia
 using POMDPModels
-using POMDPPolicies
+using POMDPTools
 using BasicPOMCP
 
 always_feed = FunctionPolicy(b->true)
@@ -116,7 +116,7 @@ solver = AdaOPSSolver(bounds=IndependentBounds(lower, upper))
 [D3Trees.jl](https://github.com/sisl/D3Trees.jl) can be used to visualize the search tree, for example
 
 ```julia
-using POMDPs, POMDPModels, POMDPModelTools, D3Trees, AdaOPS
+using POMDPs, POMDPModels, POMDPTools, D3Trees, AdaOPS
 
 pomdp = TigerPOMDP()
 
@@ -133,7 +133,7 @@ will create an interactive tree.
 Two utilities, namely `info_analysis` and `hist_analysis`, are provided for getting a sense of how the algorithm is working.
 `info_analysis` takes the infomation returned from `action_info(planner, b0)`. It will first visualize the tree if the `tree_in_info` option is turned on. Then it will show stats such as number nodes expanded, total explorations, average observation branches, and so on. `hist_analysis` takes the `hist` from `HistoryRecorder` simulator. It will show similar stats as `info_analysis` but in the form of figures. It should be noted that `HistoryRecoder` will store the tree of each single step, which makes it memory-intensive. An example is shown as follows.
 ```julia
-using POMDPs, AdaOPS, RockSample, POMDPSimulators, ParticleFilters, POMDPModelTools
+using POMDPs, AdaOPS, RockSample,ParticleFilters, POMDPTools
 
 m = RockSamplePOMDP(11, 11)
 
@@ -155,7 +155,7 @@ a, info = action_info(adaops, b0)
 info_analysis(info)
 
 num_particles = 30000
-@time hist = simulate(HistoryRecorder(max_steps=90), m, adaops, SIRParticleFilter(m, num_particles), b0, s0)
+@time hist = simulate(HistoryRecorder(max_steps=90), m, adaops, BootstrapFilter(m, num_particles), b0, s0)
 hist_analysis(hist)
 @show undiscounted_reward(hist)
 ```
