@@ -1,15 +1,13 @@
 module AdaOPS
 
 using POMDPs
-using BeliefUpdaters
+using POMDPTools
 using Parameters
 using CPUTime
 using ParticleFilters
 using D3Trees
 using Random
 using Printf
-using POMDPModelTools
-using POMDPSimulators
 using POMDPLinter
 using LinearAlgebra
 using Distances

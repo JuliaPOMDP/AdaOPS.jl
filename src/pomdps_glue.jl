@@ -1,6 +1,6 @@
 POMDPs.solve(sol::AdaOPSSolver, p::POMDP) = AdaOPSPlanner(sol, p)
 
-function POMDPModelTools.action_info(p::AdaOPSPlanner{S,A}, b) where {S,A}
+function POMDPTools.action_info(p::AdaOPSPlanner{S,A}, b) where {S,A}
     info = Dict{Symbol, Any}()
     sol = solver(p)
     try
@@ -34,7 +34,7 @@ end
 POMDPs.action(p::AdaOPSPlanner{S,A}, b) where {S,A} = first(action_info(p, b))::A
 function POMDPs.updater(p::AdaOPSPlanner)
     sol = solver(p)
-    SIRParticleFilter(p.pomdp, sol.m_max*50, rng=p.rng)
+    BootstrapFilter(p.pomdp, sol.m_max*50, p.rng)
 end
 
 function Random.seed!(p::AdaOPSPlanner, seed)
