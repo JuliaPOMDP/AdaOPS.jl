@@ -134,10 +134,10 @@ Further information can be found in the field docstrings (e.g.
     "If true, sanity checks on the provided bounds are performed."
     bounds_warnings::Bool                   = false
 
-    "If true, a reprenstation of the constructed DESPOT is returned by POMDPTools.action_info."
+    "If true, a reprenstation of the constructed AdaOPSTree is returned by POMDPModelTools.action_info."
     tree_in_info::Bool                      = false
 
-    "Issue an warning when the planning time surpass the time limit by `timeout_warning_threshold` times"
+    "Issue an warning when the planning time surpass `timeout_warning_threshold`"
     timeout_warning_threshold::Float64      = T_max * 2.0
 
     "Search iterations end when `timer() - start_time ≥ T_max`.
