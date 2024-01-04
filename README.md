@@ -1,7 +1,7 @@
 # AdaOPS
 
 [![CI](https://github.com/JuliaPOMDP/AdaOPS.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/JuliaPOMDP/AdaOPS.jl/actions/workflows/CI.yml)
-[![codecov.io](http://codecov.io/github/JuliaPOMDP/AdaOPS.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaPOMDP/AdaOPS.jl?branch=master)
+[![codecov.io](http://codecov.io/github/JuliaPOMDP/AdaOPS.jl/coverage.svg?branch=main)](http://codecov.io/github/JuliaPOMDP/AdaOPS.jl?branch=main)
 
 An implementation of the AdaOPS (Adaptive Online Packing-guided Search), which is an online POMDP Solver used to solve problems defined with the [POMDPs.jl generative interface](https://github.com/JuliaPOMDP/POMDPs.jl). The [paper](https://openreview.net/forum?id=0zvTBoQb5PA) of AdaOPS was published on NeurIPS'2021.
 
