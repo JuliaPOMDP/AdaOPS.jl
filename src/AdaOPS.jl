@@ -134,7 +134,7 @@ Further information can be found in the field docstrings (e.g.
     "If true, sanity checks on the provided bounds are performed."
     bounds_warnings::Bool                   = false
 
-    "If true, a reprenstation of the constructed AdaOPSTree is returned by POMDPModelTools.action_info."
+    "If true, a reprenstation of the constructed AdaOPSTree is returned by POMDPTools.action_info."
     tree_in_info::Bool                      = false
 
     "Issue an warning when the planning time surpass `timeout_warning_threshold`"

@@ -1,6 +1,6 @@
 name = "AdaOPS"
 uuid = "eadfb9d8-44f1-454c-a5eb-0663ee7d74a1"
-repo = "git@github.com:LAMDA-POMDP/AdaOPS.jl.git"
+repo = "git@github.com:JuliaPOMDP/AdaOPS.jl.git"
 version = "0.6.0"
 
 [deps]
@@ -36,7 +36,7 @@ Parameters = "0.12"
 ParticleFilters = "0.5"
 Plots = "1"
 StaticArrays = "0.12, 1"
-julia = "1"
+julia = "1.6"
 
 [extras]
 POMDPModels = "355abbd5-f08e-5560-ac9e-8b5f2592a0ca"
