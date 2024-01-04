@@ -1,23 +1,18 @@
 # AdaOPS
 
-[![Build Status](https://travis-ci.com/LAMDA-POMDP/AdaOPS.jl.svg?branch=main)](https://travis-ci.com/LAMDA-POMDP/AdaOPS.jl)
-
-[![Coverage Status](https://coveralls.io/repos/LAMDA-POMDP/AdaOPS.jl/badge.svg?branch=main&service=github)](https://coveralls.io/github/LAMDA-POMDP/AdaOPS.jl?branch=main)
-
-[![codecov.io](http://codecov.io/github/LAMDA-POMDP/AdaOPS.jl/coverage.svg?branch=main)](http://codecov.io/github/LAMDA-POMDP/AdaOPS.jl?branch=main)
-
+[![CI](https://github.com/JuliaPOMDP/AdaOPS.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/JuliaPOMDP/AdaOPS.jl/actions/workflows/CI.yml)
+[![codecov.io](http://codecov.io/github/JuliaPOMDP/AdaOPS.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaPOMDP/AdaOPS.jl?branch=master)
 
 An implementation of the AdaOPS (Adaptive Online Packing-guided Search), which is an online POMDP Solver used to solve problems defined with the [POMDPs.jl generative interface](https://github.com/JuliaPOMDP/POMDPs.jl). The [paper](https://openreview.net/forum?id=0zvTBoQb5PA) of AdaOPS was published on NeurIPS'2021.
 
 If you are trying to use this package and require more documentation, please file an issue!
 
 ## Installation
-Press `]` key to enter the package management mode of Julia. Then, execute the following code.
+Use the Julia package manager to install AdaOPS:
 
 ```julia
-pkg> add "POMDPs"
-pkg> registry add "https://github.com/JuliaPOMDP/Registry.git"
-pkg> add AdaOPS
+using Pkg
+Pkg.add("AdaOPS")
 ```
 
 ## Usage
